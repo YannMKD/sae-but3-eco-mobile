@@ -32,6 +32,49 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     });
   }
 
+  void _onRemove(String trackId) {
+    for (Track track in _likedTracks){
+      if (trackId == track.trackId) {
+        widget.dbService.updateInteraction(trackId, 0);
+        _loadPlaylist();
+      }
+    }
+  }
+
+  void _onRemoveAll() {
+    for (Track track in _likedTracks){
+      if (track.liked == 1) {
+        widget.dbService.updateInteraction(track.trackId, 0);
+      }
+    }
+    _loadPlaylist();
+  }
+
+  void _confirmAndResetLikedTracks(BuildContext context) {
+    showDialog(
+      context: context, 
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Confirmer la suppresion"),
+          content: const Text("Êtes-vous sûr de vouloir supprimer toute votre like list ? Cette action est iréversible"),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(), 
+              child: const Text("Annuler")
+            ), 
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _onRemoveAll();
+              },
+              child: const Text("Supprimer Tout", style: TextStyle(color: Colors.red)),
+            )
+          ],
+        );
+      }
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,49 +114,86 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _likedTracks.length,
-      separatorBuilder: (context, index) => const Divider(),
-      itemBuilder: (context, index) {
-        final track = _likedTracks[index];
-        
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                blurRadius: 5,
-                offset: const Offset(0, 2),
+    return Column(
+      // mainAxisSize: MainAxisSize.min, // Non nécessaire dans une Column principale
+      children: [
+        // Bouton de suppression globale (laissé dans le Column, mais vous devriez considérer l'AppBar)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: () => _confirmAndResetLikedTracks(context),
+                icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                label: const Text(
+                  'Supprimer Toute la Liste',
+                  style: TextStyle(color: Colors.red),
+                ),
               ),
             ],
           ),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.blueAccent.withOpacity(0.1),
-              child: const Icon(Icons.music_note, color: Colors.blueAccent),
-            ),
-            title: Text(
-              track.trackName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              track.trackArtist,
-              style: TextStyle(color: Colors.grey[700]),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Text(
-              "${track.trackPopularity.toInt()}",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
+        ),
+
+        // 1. CORRECTION: Envelopper la ListView dans Expanded
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: _likedTracks.length,
+            separatorBuilder: (context, index) => const Divider(),
+            itemBuilder: (context, index) {
+              final track = _likedTracks[index];
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blueAccent.withOpacity(0.1),
+                    child: const Icon(Icons.music_note, color: Colors.blueAccent),
+                  ),
+                  title: Text(
+                    track.trackName,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    track.trackArtist,
+                    style: TextStyle(color: Colors.grey[700]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // 2. CORRECTION: Remplacer le FloatingActionButton par un IconButton
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "${track.trackPopularity.toInt()}",
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const SizedBox(width: 8), // Petit espace
+                      IconButton( // Utilisation d'un IconButton plus approprié
+                        icon: const Icon(Icons.close, color: Colors.red),
+                        onPressed: () => _onRemove(track.trackId),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-        );
-      },
+        )
+      ]
     );
   }
 }
