@@ -1,11 +1,45 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/playlist_screen.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
-import 'dart:math' as math; 
+import 'dart:math' as math;
+
+// ========== CONSTANTES ==========
+class _CardConstants {
+  static const double width = 350;
+  static const double height = 450;
+  static const double borderRadius = 9;
+  static const double swipeThreshold = 100.0;
+  static const double maxRotationAngle = 20.0;
+  static const double dragRotationDivisor = 500.0;
+  static const Duration animationDuration = Duration(milliseconds: 250); // Légèrement augmenté pour la fluidité
+  static const double nextCardScale = 0.9;
+  static const double nextCardScaleMax = 1.0;
+}
+
+class _TextStyles {
+  static final artistStyle = TextStyle(
+    fontSize: 18,
+    color: Colors.white70,
+    fontWeight: FontWeight.w300,
+  );
+  static const titleStyle = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.bold,
+    color: Colors.white,
+  );
+  static const infoStyle = TextStyle(
+    fontSize: 14,
+    color: Colors.white60,
+  );
+}
+
+class _Colors {
+  static final cardBackground = Colors.blueGrey.shade700;
+}
 
 class MyHomeScreen extends StatefulWidget {
-  final DatabaseService dbService; 
+  final DatabaseService dbService;
   const MyHomeScreen({super.key, required this.dbService});
 
   @override
@@ -13,322 +47,219 @@ class MyHomeScreen extends StatefulWidget {
 }
 
 class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderStateMixin {
-  int _selectedIndex = 0; 
   bool _isLoading = true;
   int _currentTrackIndex = 0;
   List<Track> _recommendations = [];
-  String _currentStrategy = "Cold Start"; 
-
-  double _dragX = 0.0;
-  double _startDragX = 0.0;
+  
+  // Utilisation d'un ValueNotifier pour éviter le setState saccadé
+  final ValueNotifier<double> _dragXNotifier = ValueNotifier<double>(0.0);
   late final AnimationController _animationController;
-  final double _swipeThreshold = 100.0;
-
-  void _resetCardAnimationListener() {
-    setState(() {
-      _dragX = _startDragX * (1.0 - _animationController.value); 
-    });
-  }
 
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: _CardConstants.animationDuration,
     );
-    _animationController.addListener(_resetCardAnimationListener);
-
-    _fetchHybridRecommendations();
+    _fetchHybridRecommendations(isInitial: true);
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _dragXNotifier.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchHybridRecommendations() async {
-    setState(() {
-      _isLoading = true;
-    });
-    
+  Future<void> _fetchHybridRecommendations({bool isInitial = false}) async {
+    if (isInitial) setState(() => _isLoading = true);
     final int interactionCount = await widget.dbService.countInteractions();
-    
-    final List<Track> tracks;
-    if (interactionCount < 5) {
-      tracks = await widget.dbService.getColdStartTracks();
-      _currentStrategy = "Démarrage à Froid";
-    } else {
-      tracks = await widget.dbService.getHybridRecommendations();
-      _currentStrategy = "Hybride (Personnalisé)";
-    }
+    final List<Track> tracks = interactionCount < 5 
+        ? await widget.dbService.getColdStartTracks() 
+        : await widget.dbService.getHybridRecommendations();
 
-    setState(() {
-      _recommendations = tracks;
-      _isLoading = false;
-      _currentTrackIndex = 0;
-      print("LOG: Nouvelle session. Stratégie actuelle: $_currentStrategy. Morceaux: ${_recommendations.length}");
-    });
+    if (mounted) {
+      setState(() {
+        _recommendations.addAll(tracks);
+        _isLoading = false;
+      });
+    }
   }
 
-  void _onSwipe(bool liked) async { 
+  void _onSwipe(bool liked) async {
     if (_recommendations.isEmpty) return;
+    await widget.dbService.updateInteraction(_recommendations[_currentTrackIndex].trackId, liked ? 1 : -1);
 
-    final Track currentTrack = _recommendations[_currentTrackIndex];
-    final int status = liked ? 1 : -1;
-
-    await widget.dbService.updateInteraction(currentTrack.trackId, status);
-    
     setState(() {
       _currentTrackIndex++;
-      _dragX = 0.0; 
-      _startDragX = 0.0;
+      _dragXNotifier.value = 0.0;
     });
 
-    if (_currentTrackIndex >= _recommendations.length) {
-      await _fetchHybridRecommendations(); 
-    }
-  }
-
-  void _onPanEnd(DragEndDetails details) {
-    final double finalX = _dragX;
-    final bool liked = finalX > 0;
-    
-    if (finalX.abs() > _swipeThreshold) {
-      _animateAndCompleteSwipe(liked);
-    } else {
-      _resetCard();
+    if (_recommendations.length - _currentTrackIndex <= 3) {
+      _fetchHybridRecommendations();
     }
   }
 
   void _resetCard() {
-    _startDragX = _dragX;
-    _animationController.removeListener(_resetCardAnimationListener);
-    _animationController.addListener(_resetCardAnimationListener);
-    _animationController.reverse(from: 1.0);
+    final double startX = _dragXNotifier.value;
+    final Animation<double> resetAnim = Tween<double>(begin: startX, end: 0.0)
+        .animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack));
+
+    resetAnim.addListener(() => _dragXNotifier.value = resetAnim.value);
+    _animationController.forward(from: 0.0);
   }
 
   void _animateAndCompleteSwipe(bool liked) {
-    if (_recommendations.isEmpty) return;
-    
-    final double targetX = liked ? 1000.0 : -1000.0; 
-    final double startX = _dragX;
-    
-    final offScreenListener = () {
-      setState(() {
-        _dragX = Tween<double>(begin: startX, end: targetX)
-            .evaluate(_animationController);
-      });
-    };
+    final double startX = _dragXNotifier.value;
+    final double targetX = liked ? 1000.0 : -1000.0;
 
-    _animationController.removeListener(_resetCardAnimationListener); 
-    _animationController.addListener(offScreenListener);
+    final Animation<double> swipeAnim = Tween<double>(begin: startX, end: targetX)
+        .animate(CurvedAnimation(parent: _animationController, curve: Curves.easeIn));
 
-    _animationController.forward(from: 0.0).then((_) {
-      _onSwipe(liked); 
-
-      _animationController.removeListener(offScreenListener); 
-      _animationController.reset(); 
-      _animationController.addListener(_resetCardAnimationListener);
-    });
+    swipeAnim.addListener(() => _dragXNotifier.value = swipeAnim.value);
+    _animationController.forward(from: 0.0).then((_) => _onSwipe(liked));
   }
-  
-  void _onButtonSwipe(bool liked) {
-      if (_recommendations.isEmpty) return;
-      
-      setState(() {
-          _dragX = liked ? _swipeThreshold + 1 : -(_swipeThreshold + 1);
-      });
-      
-      _animateAndCompleteSwipe(liked);
-  }
-  
+
+  void _onButtonSwipe(bool liked) => _animateAndCompleteSwipe(liked);
+
   Widget _buildTrackCard(Track track) {
-      return Container(
-        width: 300,
-        height: 400,
-        decoration: BoxDecoration(
-          color: Colors.blueGrey.shade700, 
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 15.0,
-              offset: Offset(0, 8),
-            ),
+    return Container(
+      width: _CardConstants.width,
+      height: _CardConstants.height,
+      decoration: BoxDecoration(
+        color: _Colors.cardBackground,
+        borderRadius: BorderRadius.circular(_CardConstants.borderRadius),
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(track.trackName, style: _TextStyles.titleStyle, maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 5),
+            Text(track.trackArtist, style: _TextStyles.artistStyle),
+            const SizedBox(height: 5),
+            Text('Style: ${track.clusterStyle}', style: _TextStyles.infoStyle),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                track.trackArtist, 
-                style: TextStyle(
-                  fontSize: 18, 
-                  color: Colors.white70, 
-                  fontWeight: FontWeight.w300
-                )
-              ),
-              const SizedBox(height: 8),
-              Text(
-                track.trackName,
-                style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 15),
-              Text(
-                'Popularité: ${track.trackPopularity.toStringAsFixed(1)}\nStyle: ${track.clusterStyle}',
-                style: const TextStyle(
-                  fontSize: 14, 
-                  color: Colors.white60
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    
-    if (_isLoading) {
-      return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text("Chargement ($_currentStrategy)..."), 
-            ],
-          ),
-        ),
-      );
-    }
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_currentTrackIndex >= _recommendations.length) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    if (_recommendations.isEmpty) {
-      return const Scaffold(
-        body: Center(
-          child: Text("Aucun morceau trouvé. Vérifiez la connexion à la BDD."),
-        ),
-      );
-    }
-    
-    final Track trackActuel = _recommendations[_currentTrackIndex];
-
-    final int nextIndex = (_currentTrackIndex + 1) % _recommendations.length;
-    final Track trackSuivant = _recommendations.length > 1 ? _recommendations[nextIndex] : trackActuel;
-
-    final double dragFactor = (_dragX.abs() / _swipeThreshold).clamp(0.0, 1.0);
-    final double angle = _dragX / 500 * (math.pi / 180 * 20); 
+    final currentTrack = _recommendations[_currentTrackIndex];
+    final nextTrack = (_currentTrackIndex + 1 < _recommendations.length) ? _recommendations[_currentTrackIndex + 1] : null;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: Text("KEYRIL Recommandation ($_currentStrategy)"), 
-        backgroundColor: Colors.blueAccent,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            
-            Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: <Widget>[
-                if (_recommendations.length > 1) 
-                  Transform.scale(
-                    scale: 0.9 + (dragFactor * 0.1), 
-                    child: _buildTrackCard(trackSuivant), 
-                  ),
-
-                GestureDetector(
-                  onPanStart: (details) {
-                      _startDragX = 0.0;
-                      _animationController.stop();
-                  },
-                  onPanUpdate: (details) {
-                      setState(() {
-                          _dragX += details.delta.dx;
-                      });
-                  },
-                  onPanEnd: _onPanEnd, 
-                  child: Transform.translate(
-                    offset: Offset(_dragX, 0),
-                    child: Transform.rotate(
-                      angle: angle,
-                      child: _buildTrackCard(trackActuel),
-                    ),
-                  ),
-                ),
-              ],
+      backgroundColor: const Color.fromARGB(255, 248, 247, 241),
+      body: Stack(
+        children: [
+          Positioned.fill(child: Image.asset('assets/images/BACKGROUND2.png', fit: BoxFit.cover)),
+          _buildOverlayGradient(),
+          SafeArea(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildCardStackNotifier(currentTrack, nextTrack),
+                  const SizedBox(height: 15),
+                  _buildActionButtons(),
+                ],
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            const SizedBox(height: 40),
+  Widget _buildCardStackNotifier(Track current, Track? next) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _dragXNotifier,
+      builder: (context, dragX, child) {
+        final dragFactor = (dragX.abs() / _CardConstants.swipeThreshold).clamp(0.0, 1.0);
+        final angle = (dragX / _CardConstants.dragRotationDivisor) * (math.pi / 180 * _CardConstants.maxRotationAngle);
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                FloatingActionButton(
-                  heroTag: "dislikeBtn",
-                  onPressed: () => _onButtonSwipe(false),
-                  backgroundColor: Colors.red.shade400,
-                  foregroundColor: Colors.white,
-                  child: const Icon(Icons.close, size: 30),
+        return Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: <Widget>[
+            if (next != null)
+              Transform.scale(
+                scale: _CardConstants.nextCardScale + (dragFactor * (1.0 - _CardConstants.nextCardScale)),
+                child: _buildTrackCard(next),
+              ),
+            GestureDetector(
+              onPanStart: (_) => _animationController.stop(),
+              onPanUpdate: (d) => _dragXNotifier.value += d.delta.dx,
+              onPanEnd: (_) {
+                if (_dragXNotifier.value.abs() > _CardConstants.swipeThreshold) {
+                  _animateAndCompleteSwipe(_dragXNotifier.value > 0);
+                } else {
+                  _resetCard();
+                }
+              },
+              child: Transform.translate(
+                offset: Offset(dragX, 0),
+                child: Transform.rotate(
+                  angle: angle,
+                  child: _buildTrackCard(current),
                 ),
-                const SizedBox(width: 40),
-                FloatingActionButton(
-                  heroTag: "likeBtn",
-                  onPressed: () => _onButtonSwipe(true),
-                  backgroundColor: Colors.green.shade400,
-                  foregroundColor: Colors.white,
-                  child: const Icon(Icons.favorite, size: 30),
-                ),
-              ],
+              ),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOverlayGradient() {
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color.fromARGB(255, 248, 247, 241),
+              const Color.fromARGB(255, 248, 247, 241).withOpacity(0.3),
+              const Color.fromARGB(255, 248, 247, 241).withOpacity(0.3),
+              const Color.fromARGB(255, 248, 247, 241),
+            ],
+            stops: const [0.0, 0.15, 0.85, 1.0],
+          ),
         ),
       ),
-      
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.white,
-        currentIndex: _selectedIndex, 
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Accueil"),
-          BottomNavigationBarItem(icon: Icon(Icons.queue_music_rounded), label: "Playlist"),
-        ],
-        onTap: (int index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-          if (index == 1) {
-            Navigator.push(
-              context, 
-              MaterialPageRoute(
-                builder: (context) => PlaylistScreen(dbService: widget.dbService),
-              ),
-            ).then((_) {
-              setState(() {
-                _selectedIndex = 0;
-              });
-            });
-          }
-        },
-      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        FloatingActionButton(
+          heroTag: "dislikeBtn",
+          onPressed: () => _onButtonSwipe(false),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: const Icon(Icons.close, size: 30, color: Colors.black),
+        ),
+        const SizedBox(width: 150),
+        FloatingActionButton(
+          heroTag: "likeBtn",
+          onPressed: () => _onButtonSwipe(true),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: const Icon(Icons.favorite, size: 30, color: Colors.black),
+        ),
+      ],
     );
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/models/glass_box.dart';
+import 'package:flutter_application_1/utils/image_asset_util.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 
@@ -8,22 +10,20 @@ class PlaylistScreen extends StatefulWidget {
   const PlaylistScreen({super.key, required this.dbService});
 
   @override
-  State<PlaylistScreen> createState() => _PlaylistScreenState();
+  State<PlaylistScreen> createState() => PlaylistScreenState();
 }
 
-class _PlaylistScreenState extends State<PlaylistScreen> {
+class PlaylistScreenState extends State<PlaylistScreen> {
   bool _isLoading = true;
   List<Track> _likedTracks = [];
 
   @override
   void initState() {
     super.initState();
-    _loadPlaylist();
+    loadPlaylist();
   }
 
-  Future<void> _loadPlaylist() async {
-    setState(() => _isLoading = true);
-    
+  Future<void> loadPlaylist() async {    
     final tracks = await widget.dbService.getLikedTracks();
     
     setState(() {
@@ -33,21 +33,25 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   void _onRemove(String trackId) {
-    for (Track track in _likedTracks){
-      if (trackId == track.trackId) {
-        widget.dbService.updateInteraction(trackId, 0);
-        _loadPlaylist();
-      }
-    }
+    setState(() {
+      _likedTracks.removeWhere((track) => track.trackId == trackId);
+    });
+
+    widget.dbService.updateInteraction(trackId, 0);
+
+    loadPlaylist();
   }
 
   void _onRemoveAll() {
+    setState(() => _isLoading = true);
+
     for (Track track in _likedTracks){
       if (track.liked == 1) {
         widget.dbService.updateInteraction(track.trackId, 0);
       }
     }
-    _loadPlaylist();
+    
+    loadPlaylist();
   }
 
   void _confirmAndResetLikedTracks(BuildContext context) {
@@ -78,12 +82,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text("Ma Playlist"),
-        backgroundColor: Colors.blueAccent,
-        foregroundColor: Colors.white,
-      ),
+      backgroundColor: const Color.fromARGB(255, 248, 247, 241),
       body: _buildBody(),
     );
   }
@@ -115,9 +114,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
 
     return Column(
-      // mainAxisSize: MainAxisSize.min, // Non nécessaire dans une Column principale
       children: [
-        // Bouton de suppression globale (laissé dans le Column, mais vous devriez considérer l'AppBar)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Row(
@@ -135,31 +132,23 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           ),
         ),
 
-        // 1. CORRECTION: Envelopper la ListView dans Expanded
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: _likedTracks.length,
-            separatorBuilder: (context, index) => const Divider(),
+            separatorBuilder: (context, index) => const Divider(thickness: 0,),
             itemBuilder: (context, index) {
               final track = _likedTracks[index];
+              final String backgroundImagePath = ImageAssetUtil.getTrackBackgroundAsset(track.clusterStyle);
 
-              return Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      blurRadius: 5,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
+              return GlassBox(
+                width: MediaQuery.of(context).size.width,
+                height: 94,
+                borderRadius: BorderRadius.circular(5),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.blueAccent.withOpacity(0.1),
-                    child: const Icon(Icons.music_note, color: Colors.blueAccent),
+                  leading: Container(
+                    height: 84,
+                    width: 84,
                   ),
                   title: Text(
                     track.trackName,
@@ -173,25 +162,19 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  // 2. CORRECTION: Remplacer le FloatingActionButton par un IconButton
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        "${track.trackPopularity.toInt()}",
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const SizedBox(width: 8), // Petit espace
-                      IconButton( // Utilisation d'un IconButton plus approprié
-                        icon: const Icon(Icons.close, color: Colors.red),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline_outlined, color: Colors.black),
                         onPressed: () => _onRemove(track.trackId),
                       ),
                     ],
                   ),
                 ),
               );
-            },
-          ),
+            }
+          )
         )
       ]
     );
