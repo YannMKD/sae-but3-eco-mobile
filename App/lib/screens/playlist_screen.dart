@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/models/glass_box.dart';
-import 'package:flutter_application_1/utils/image_asset_util.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 
@@ -59,7 +58,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
       context: context, 
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text("Confirmer la suppresion"),
+          title: const Text("Confirmer la suppression"),
           content: const Text("Êtes-vous sûr de vouloir supprimer toute votre like list ? Cette action est iréversible"),
           actions: <Widget>[
             TextButton(
@@ -100,7 +99,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
             Icon(Icons.music_off_rounded, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              "Pas encore de recommandation",
+              "Pas encore de titres aimés",
               style: TextStyle(fontSize: 18, color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
@@ -139,7 +138,6 @@ class PlaylistScreenState extends State<PlaylistScreen> {
             separatorBuilder: (context, index) => const Divider(thickness: 0,),
             itemBuilder: (context, index) {
               final track = _likedTracks[index];
-              final String backgroundImagePath = ImageAssetUtil.getTrackBackgroundAsset(track.clusterStyle);
 
               return GlassBox(
                 width: MediaQuery.of(context).size.width,
@@ -149,6 +147,11 @@ class PlaylistScreenState extends State<PlaylistScreen> {
                   leading: Container(
                     height: 84,
                     width: 84,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.music_note, size: 40, color: Colors.grey),
                   ),
                   title: Text(
                     track.trackName,

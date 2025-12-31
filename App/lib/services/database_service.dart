@@ -1,5 +1,3 @@
-//TEST
-
 import 'dart:io';
 import 'package:path/path.dart' show dirname;
 
@@ -101,18 +99,18 @@ class DatabaseQueries {
 
     static const String findArtistTracks = '''
         SELECT
-                track_id, 
-                track_name, 
+                track_id,
+                track_name,
                 track_artist,
                 Cluster_Style,
                 track_popularity,
                 liked,
                 CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8
-        FROM 
+        FROM
                 tracks
         WHERE
-                liked = 0 
-                AND track_artist IN (?) // Placeholder qui sera remplacé par ('Artiste A', 'Artiste B', ...)
+                liked = 0
+                AND track_artist IN (?)
         ORDER BY
                 track_popularity DESC
         LIMIT 3;
@@ -172,11 +170,24 @@ class DatabaseService {
         return rows.map((r) => Track.fromMap(r)).toList();
     }
 
+    Future<List<String>> getLikedArtists() async {
+        final rows = await _db.rawQuery(DatabaseQueries.getLikedArtists);
+        return rows.map((r) => r['track_artist'] as String).toList();
+    }
+
+    Future<List<Track>> getArtistRecommendations(List<String> artists) async {
+        if (artists.isEmpty) return [];
+        final placeholders = List.filled(artists.length, '?').join(',');
+        final query = DatabaseQueries.findArtistTracks.replaceFirst('(?)', '($placeholders)');
+        final rows = await _db.rawQuery(query, artists);
+        return rows.map((r) => Track.fromMap(r)).toList();
+    }
+
     Future<List<Track>> getHybridRecommendations() async {
         final profileRows = await _db.rawQuery(DatabaseQueries.calculateProfileVector);
         if (profileRows.isEmpty) return [];
 
-        final profile = ProfileVector.fromMap(profileRows.first); 
+        final profile = ProfileVector.fromMap(profileRows.first);
         final avgList = profile.toSqlParams();
 
         final params = <dynamic>[];
@@ -185,8 +196,27 @@ class DatabaseService {
             params.add(v);
         }
 
-        final rows = await _db.rawQuery(DatabaseQueries.findSimilarTracks, params);
-        return rows.map((r) => Track.fromMap(r)).toList();
+        // 70% vector recommendations
+        final vectorRows = await _db.rawQuery(DatabaseQueries.findSimilarTracks, params);
+        final vectorTracks = vectorRows.map((r) => Track.fromMap(r)).toList();
+
+        // 30% artist recommendations
+        final likedArtists = await getLikedArtists();
+        final artistTracks = await getArtistRecommendations(likedArtists);
+
+        // Combine: 7 vector + 3 artist = 10 tracks
+        final combined = <Track>[];
+        combined.addAll(vectorTracks.take(7));
+        combined.addAll(artistTracks.take(3));
+
+        // Shuffle and filter for discovery (80% popular, 20% discovery)
+        combined.shuffle();
+        final popular = combined.where((t) => t.trackPopularity > 50).take((combined.length * 0.8).round());
+        final discovery = combined.where((t) => t.trackPopularity <= 50).take((combined.length * 0.2).round());
+        final finalList = [...popular, ...discovery];
+        finalList.shuffle();
+
+        return finalList;
     }
 
     Future<void> updateInteraction(String trackId, int status) async {

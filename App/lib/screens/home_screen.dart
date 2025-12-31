@@ -14,7 +14,6 @@ class _CardConstants {
   static const double dragRotationDivisor = 500.0;
   static const Duration animationDuration = Duration(milliseconds: 250); // Légèrement augmenté pour la fluidité
   static const double nextCardScale = 0.9;
-  static const double nextCardScaleMax = 1.0;
 }
 
 class _TextStyles {
@@ -229,8 +228,8 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
             end: Alignment.bottomCenter,
             colors: [
               const Color.fromARGB(255, 248, 247, 241),
-              const Color.fromARGB(255, 248, 247, 241).withOpacity(0.3),
-              const Color.fromARGB(255, 248, 247, 241).withOpacity(0.3),
+              const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3),
+              const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3),
               const Color.fromARGB(255, 248, 247, 241),
             ],
             stops: const [0.0, 0.15, 0.85, 1.0],

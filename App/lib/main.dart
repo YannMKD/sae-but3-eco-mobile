@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/screens/playlist_screen.dart';
 import 'package:flutter_application_1/screens/app_layouts.dart';
 import '../services/database_service.dart';
-import '../models/track.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); 

@@ -28,7 +28,7 @@ class GlassBox extends StatelessWidget {
               child: ImageFiltered(
                 imageFilter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                 child: Container(
-                  color: Colors.white.withOpacity(0.2), 
+                  color: Colors.white.withValues(alpha: 0.2),
                 ),
               ),
             ),
@@ -37,15 +37,15 @@ class GlassBox extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: Colors.black.withOpacity(0.14), 
+                  color: Colors.black.withValues(alpha: 0.14),
                   width: 1,
                 ),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color.fromARGB(255, 208, 208, 208).withOpacity(0.3),
-                    const Color.fromARGB(255, 208, 208, 208).withOpacity(0.05),
+                    const Color.fromARGB(255, 208, 208, 208).withValues(alpha: 0.3),
+                    const Color.fromARGB(255, 208, 208, 208).withValues(alpha: 0.05),
                   ],
                 ),
               ),

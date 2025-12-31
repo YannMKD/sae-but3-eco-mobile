@@ -18,7 +18,7 @@ class _AppLayoutState extends State<AppLayout> {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> _screens = [
+    final List<Widget> screens = [
       MyHomeScreen(dbService: widget.dbService),
       PlaylistScreen(key: playlistKey, dbService: widget.dbService),
     ];
@@ -42,7 +42,7 @@ class _AppLayoutState extends State<AppLayout> {
       ),
       body: IndexedStack(
         index: _selectedIndex,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: Container(
         color: const Color.fromARGB(255, 248, 247, 241),
@@ -75,11 +75,11 @@ class _AppLayoutState extends State<AppLayout> {
                     width: 100,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: _selectedIndex == 0 
-                          ? Colors.white.withOpacity(0.9) 
-                          : Colors.white.withOpacity(0.25),
+                      color: _selectedIndex == 0
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : Colors.white.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.14), width: 1),
+                      border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.14), width: 1),
                     ),
                     padding: const EdgeInsets.all(1),
                     child: Center(
@@ -97,11 +97,11 @@ class _AppLayoutState extends State<AppLayout> {
                     width: 100,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: _selectedIndex == 1 
-                          ? Colors.white.withOpacity(0.9) 
-                          : Colors.white.withOpacity(0.25),
+                      color: _selectedIndex == 1
+                          ? Colors.white.withValues(alpha: 0.9)
+                          : Colors.white.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withOpacity(0.14), width: 1),
+                      border: Border.all(color: const Color.fromARGB(255, 0, 0, 0).withValues(alpha: 0.14), width: 1),
                     ),
                     padding: const EdgeInsets.all(1),
                     child: Center(
