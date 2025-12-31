@@ -1,11 +1,5 @@
-/// Fichier: lib/services/database_service.dart
-///
-/// Contient les requêtes SQL (DatabaseQueries) et un service `DatabaseService`
-/// minimal pour ouvrir la base SQLite et exposer les méthodes utilisées par
-/// l'interface (countInteractions, getColdStartTracks, getHybridRecommendations,
-/// updateInteraction).
-
 import 'dart:io';
+import 'package:path/path.dart' show dirname;
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite/sqflite.dart';
@@ -23,7 +17,7 @@ class DatabaseQueries {
     ''';
 
     static const String coldStartTracks = '''
-        SELECT
+        SELECT DISTINCT
                 track_id, 
                 track_name, 
                 track_artist,
@@ -34,7 +28,7 @@ class DatabaseQueries {
         FROM 
                 tracks
         WHERE
-                liked = 0 
+                liked = 0 OR liked IS NULL
         ORDER BY
                 track_popularity DESC 
         LIMIT 10;
@@ -57,7 +51,7 @@ class DatabaseQueries {
     ''';
 
     static const String findSimilarTracks = '''
-        SELECT
+        SELECT DISTINCT
                 track_id, track_name, track_artist, Cluster_Style, track_popularity,
                 liked, CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8,
                 (CP1 - ?) * (CP1 - ?) +
@@ -71,7 +65,7 @@ class DatabaseQueries {
         FROM 
                 tracks
         WHERE
-                liked = 0 
+                liked = 0 OR liked IS NULL
         ORDER BY 
                 distance_sq ASC
         LIMIT 7;
@@ -141,34 +135,27 @@ class DatabaseService {
         final databasesPath = await getDatabasesPath();
         final path = '$databasesPath/$dbFileName';
 
-    if (await databaseExists(path)) {
         try {
-            print('*** DEBUG BDD: Fichier existant trouvé. Tentative de suppression...'); 
-            await deleteDatabase(path); 
-            print('*** DEBUG BDD: Suppression réussie.');
-        } catch (e) {
-             print('*** DEBUG BDD: Échec de la suppression: $e');
-        }
-    }
-
-    try {
-        final exists = await databaseExists(path); 
-        if (!exists) {
-            print('*** DEBUG BDD: Fichier non existant. Copie de l\'asset...'); 
-            try {
-                final data = await rootBundle.load('assets/$dbFileName');
-                final bytes = data.buffer.asUint8List();
-                final file = File(path);
-                await file.create(recursive: true);
-                await file.writeAsBytes(bytes, flush: true);
-                print('*** DEBUG BDD: Copie de l\'asset terminée.'); 
-            } catch (e) {
-                print('*** DEBUG BDD: ÉCHEC CRITIQUE de la copie de l\'asset: $e');
+            final exists = await databaseExists(path);
+            if (!exists) {
+                print('*** DEBUG BDD: Fichier non existant. Copie de l\'asset...');
+                try {
+                    final data = await rootBundle.load('assets/$dbFileName');
+                    final bytes = data.buffer.asUint8List();
+                    await Directory(dirname(path)).create(recursive: true);
+                    final file = File(path);
+                    await file.writeAsBytes(bytes, flush: true);
+                    print('*** DEBUG BDD: Copie de l\'asset terminée.');
+                } catch (e) {
+                    print('*** DEBUG BDD: ÉCHEC CRITIQUE de la copie de l\'asset: $e');
+                }
+            } else {
+                print('*** DEBUG BDD: Fichier existant trouvé. Conservation de la BD et des données.');
             }
-        } else {
-            print('*** DEBUG BDD: Fichier existant trouvé APRÈS suppression. Utilisation de l\'ancien fichier corrompu.'); // -> AJOUTER CECI
+        } catch (e) {
+            print('*** DEBUG BDD: Erreur lors de l\'initialisation: $e');
         }
-    } catch (_) {}
+
         final db = await openDatabase(path);
         return DatabaseService._(db);
     }
