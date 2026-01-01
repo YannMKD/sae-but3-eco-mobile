@@ -49,7 +49,8 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
   bool _isLoading = true;
   int _currentTrackIndex = 0;
   List<Track> _recommendations = [];
-  
+  final Set<String> _shownTrackIds = <String>{}; // Track IDs already shown to avoid duplicates
+
   // Utilisation d'un ValueNotifier pour éviter le setState saccadé
   final ValueNotifier<double> _dragXNotifier = ValueNotifier<double>(0.0);
   late final AnimationController _animationController;
@@ -74,9 +75,12 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
   Future<void> _fetchHybridRecommendations({bool isInitial = false}) async {
     if (isInitial) setState(() => _isLoading = true);
     final int interactionCount = await widget.dbService.countInteractions();
-    final List<Track> tracks = interactionCount < 5 
-        ? await widget.dbService.getColdStartTracks() 
-        : await widget.dbService.getHybridRecommendations();
+    final List<Track> tracks = interactionCount < 5
+        ? await widget.dbService.getColdStartTracks(excludeTrackIds: _shownTrackIds.toList())
+        : await widget.dbService.getHybridRecommendations(excludeTrackIds: _shownTrackIds.toList());
+
+    // Add new tracks to shown set
+    _shownTrackIds.addAll(tracks.map((t) => t.trackId));
 
     if (mounted) {
       setState(() {

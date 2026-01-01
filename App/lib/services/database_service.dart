@@ -165,8 +165,22 @@ class DatabaseService {
         return Sqflite.firstIntValue(rows) ?? 0;
     }
 
-    Future<List<Track>> getColdStartTracks() async {
-        final rows = await _db.rawQuery(DatabaseQueries.coldStartTracks);
+    Future<List<Track>> getColdStartTracks({List<String>? excludeTrackIds}) async {
+        final excludeIds = excludeTrackIds ?? [];
+        final interactedRows = await _db.rawQuery('SELECT track_id FROM tracks WHERE liked != 0');
+        final interactedIds = interactedRows.map((r) => r['track_id'] as String).toSet();
+        excludeIds.addAll(interactedIds);
+
+        String query = DatabaseQueries.coldStartTracks;
+        List<dynamic> params = [];
+
+        if (excludeIds.isNotEmpty) {
+            final placeholders = List.filled(excludeIds.length, '?').join(',');
+            query = query.replaceFirst('WHERE', 'WHERE track_id NOT IN ($placeholders) AND');
+            params = excludeIds;
+        }
+
+        final rows = await _db.rawQuery(query, params);
         return rows.map((r) => Track.fromMap(r)).toList();
     }
 
@@ -183,7 +197,7 @@ class DatabaseService {
         return rows.map((r) => Track.fromMap(r)).toList();
     }
 
-    Future<List<Track>> getHybridRecommendations() async {
+    Future<List<Track>> getHybridRecommendations({List<String>? excludeTrackIds}) async {
         final profileRows = await _db.rawQuery(DatabaseQueries.calculateProfileVector);
         if (profileRows.isEmpty) return [];
 
@@ -208,6 +222,24 @@ class DatabaseService {
         final combined = <Track>[];
         combined.addAll(vectorTracks.take(7));
         combined.addAll(artistTracks.take(3));
+
+        // Remove duplicates by trackId
+        final seenTrackIds = <String>{};
+        combined.retainWhere((track) {
+            if (seenTrackIds.contains(track.trackId)) {
+                return false;
+            }
+            seenTrackIds.add(track.trackId);
+            return true;
+        });
+
+        // Exclude already interacted tracks or specified tracks
+        final excludeIds = excludeTrackIds ?? [];
+        final interactedRows = await _db.rawQuery('SELECT track_id FROM tracks WHERE liked != 0');
+        final interactedIds = interactedRows.map((r) => r['track_id'] as String).toSet();
+        excludeIds.addAll(interactedIds);
+
+        combined.removeWhere((track) => excludeIds.contains(track.trackId));
 
         // Shuffle and filter for discovery (80% popular, 20% discovery)
         combined.shuffle();
