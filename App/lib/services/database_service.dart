@@ -81,18 +81,18 @@ class DatabaseQueries {
     ''';
 
     static const String getLikedTracks = '''
-        SELECT
-                track_id, 
-                track_name, 
+        SELECT DISTINCT
+                track_id,
+                track_name,
                 track_artist,
                 Cluster_Style,
                 track_popularity,
                 liked,
                 CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8
-        FROM 
+        FROM
                 tracks
         WHERE
-                liked = 1 
+                liked = 1
         ORDER BY
                 track_popularity DESC;
     ''';
