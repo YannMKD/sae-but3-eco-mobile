@@ -5,8 +5,9 @@ import '../models/track.dart';
 
 class PlaylistScreen extends StatefulWidget {
   final DatabaseService dbService;
-  
-  const PlaylistScreen({super.key, required this.dbService});
+  final String mode;
+
+  const PlaylistScreen({super.key, required this.dbService, required this.mode});
 
   @override
   State<PlaylistScreen> createState() => PlaylistScreenState();
@@ -81,8 +82,35 @@ class PlaylistScreenState extends State<PlaylistScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 248, 247, 241),
-      body: _buildBody(),
+      backgroundColor: widget.mode == "light" ? Color.fromARGB(255, 248, 247, 241) : Colors.black,
+      body: Stack(
+        children: [
+          SafeArea(child: _buildBody(),),
+          _buildOverlayGradient(),
+        ]
+      ),
+    );
+  }
+
+  Widget _buildOverlayGradient() {
+    return IgnorePointer(
+      child: Positioned.fill(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
+                widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
+                widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
+                widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+              ],
+              stops: const [0.0, 0.3, 0.85, 1.0],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -116,15 +144,21 @@ class PlaylistScreenState extends State<PlaylistScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
             children: [
+              Text(
+                'Nombre de musique : ${_likedTracks.length}',
+                style: TextStyle(fontWeight: FontWeight.bold,  color: widget.mode == "light" ? Colors.black : Colors.white),
+                textAlign: TextAlign.left,
+              ),
               TextButton.icon(
                 onPressed: () => _confirmAndResetLikedTracks(context),
                 icon: const Icon(Icons.delete_sweep, color: Colors.red),
                 label: const Text(
                   'Supprimer Toute la Liste',
                   style: TextStyle(color: Colors.red),
+                  textAlign: TextAlign.left,
                 ),
               ),
             ],
@@ -141,40 +175,46 @@ class PlaylistScreenState extends State<PlaylistScreen> {
 
               return GlassBox(
                 width: MediaQuery.of(context).size.width,
-                height: 94,
-                borderRadius: BorderRadius.circular(5),
-                child: ListTile(
-                  leading: Container(
-                    height: 84,
-                    width: 84,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.music_note, size: 40, color: Colors.grey),
-                  ),
-                  title: Text(
-                    track.trackName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    track.trackArtist,
-                    style: TextStyle(color: Colors.grey[700]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_outlined, color: Colors.black),
-                        onPressed: () => _onRemove(track.trackId),
+                borderRadius: BorderRadius.circular(10),
+                padding: 1,
+                mode: widget.mode,
+                child: IntrinsicHeight(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                    leading: Container(
+                      height: 68,
+                      width: 68,
+                      decoration: BoxDecoration(
+                        color: widget.mode == "light" ? Colors.grey[300] : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ],
+                      child: const Icon(Icons.music_note, size: 40, color: Colors.grey),
+                    ),
+                    title: Text(
+                      track.trackName,
+                      style: TextStyle(fontWeight: FontWeight.bold, color: widget.mode == "light" ? Colors.black : Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      track.trackArtist,
+                      style: TextStyle(color: widget.mode == "light" ? Colors.grey[700] : Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: widget.mode == "light" ? 
+                            const Icon(Icons.delete_outline_outlined, color:  Colors.black):
+                            const Icon(Icons.delete_outline_outlined, color:  Colors.white),
+                          onPressed: () => _onRemove(track.trackId),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ) 
               );
             }
           )

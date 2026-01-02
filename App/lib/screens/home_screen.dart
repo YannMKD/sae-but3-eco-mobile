@@ -39,7 +39,8 @@ class _Colors {
 
 class MyHomeScreen extends StatefulWidget {
   final DatabaseService dbService;
-  const MyHomeScreen({super.key, required this.dbService});
+  final String mode;
+  const MyHomeScreen({super.key, required this.dbService, required this.mode});
 
   @override
   State<MyHomeScreen> createState() => _MyHomeScreenState();
@@ -161,10 +162,15 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
     final nextTrack = (_currentTrackIndex + 1 < _recommendations.length) ? _recommendations[_currentTrackIndex + 1] : null;
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 248, 247, 241),
+      backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
       body: Stack(
         children: [
-          Positioned.fill(child: Image.asset('assets/images/BACKGROUND2.png', fit: BoxFit.cover)),
+          Positioned.fill(
+            child: Image.asset(
+              widget.mode == "light" ? 'assets/images/BACKGROUND2.png' : "assets/images/BACKGROUND1.png", 
+              fit: BoxFit.cover
+            )
+          ),
           _buildOverlayGradient(),
           SafeArea(
             child: Center(
@@ -231,10 +237,10 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              const Color.fromARGB(255, 248, 247, 241),
-              const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3),
-              const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3),
-              const Color.fromARGB(255, 248, 247, 241),
+              widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+              widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.3),
+              widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.3),
+              widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241) : Colors.black,
             ],
             stops: const [0.0, 0.15, 0.85, 1.0],
           ),
@@ -252,7 +258,9 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
           onPressed: () => _onButtonSwipe(false),
           backgroundColor: Colors.transparent,
           elevation: 0,
-          child: const Icon(Icons.close, size: 30, color: Colors.black),
+          child:  widget.mode == "light" ? 
+            const Icon(Icons.close, size: 30, color:  Colors.black) : 
+            const Icon(Icons.close, size: 30, color:  Colors.white),
         ),
         const SizedBox(width: 150),
         FloatingActionButton(
@@ -260,7 +268,9 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
           onPressed: () => _onButtonSwipe(true),
           backgroundColor: Colors.transparent,
           elevation: 0,
-          child: const Icon(Icons.favorite, size: 30, color: Colors.black),
+          child: widget.mode == "light" ? 
+            const Icon(Icons.favorite, size: 30, color:  Colors.black) : 
+            const Icon(Icons.favorite, size: 30, color:  Colors.white),
         ),
       ],
     );
