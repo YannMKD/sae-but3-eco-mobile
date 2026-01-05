@@ -50,9 +50,8 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
   bool _isLoading = true;
   int _currentTrackIndex = 0;
   List<Track> _recommendations = [];
-  final Set<String> _shownTrackIds = <String>{}; // Track IDs already shown to avoid duplicates
+  final Set<String> _shownTrackIds = <String>{}; 
 
-  // Utilisation d'un ValueNotifier pour éviter le setState saccadé
   final ValueNotifier<double> _dragXNotifier = ValueNotifier<double>(0.0);
   late final AnimationController _animationController;
 
@@ -80,7 +79,6 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
         ? await widget.dbService.getColdStartTracks(excludeTrackIds: _shownTrackIds.toList())
         : await widget.dbService.getHybridRecommendations(excludeTrackIds: _shownTrackIds.toList());
 
-    // Add new tracks to shown set
     _shownTrackIds.addAll(tracks.map((t) => t.trackId));
 
     if (mounted) {
@@ -155,8 +153,30 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_currentTrackIndex >= _recommendations.length) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black ,
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              widget.mode == "light" ? Colors.black : Colors.white,
+            ),
+          )
+        )
+      );
+    }
+    if (_currentTrackIndex >= _recommendations.length) {
+       return Scaffold(
+        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black ,
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(
+              widget.mode == "light" ? Colors.black : Colors.white,
+            ),
+          )
+        )
+      );
+    }
 
     final currentTrack = _recommendations[_currentTrackIndex];
     final nextTrack = (_currentTrackIndex + 1 < _recommendations.length) ? _recommendations[_currentTrackIndex + 1] : null;
@@ -167,7 +187,7 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
         children: [
           Positioned.fill(
             child: Image.asset(
-              widget.mode == "light" ? 'assets/images/BACKGROUND2.png' : "assets/images/BACKGROUND1.png", 
+              widget.mode == "light" ? 'assets/images/background-offwhite.jpg' : "assets/images/background-black.jpg", 
               fit: BoxFit.cover
             )
           ),
