@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/models/glass_box.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 
 class PlaylistScreen extends StatefulWidget {
   final DatabaseService dbService;
-  
-  const PlaylistScreen({super.key, required this.dbService});
+  final String mode;
+
+  const PlaylistScreen({super.key, required this.dbService, required this.mode});
 
   @override
-  State<PlaylistScreen> createState() => _PlaylistScreenState();
+  State<PlaylistScreen> createState() => PlaylistScreenState();
 }
 
-class _PlaylistScreenState extends State<PlaylistScreen> {
+class PlaylistScreenState extends State<PlaylistScreen> {
   bool _isLoading = true;
   List<Track> _likedTracks = [];
 
   @override
   void initState() {
     super.initState();
-    _loadPlaylist();
+    loadPlaylist();
   }
 
-  Future<void> _loadPlaylist() async {
-    setState(() => _isLoading = true);
-    
+  Future<void> loadPlaylist() async {    
     final tracks = await widget.dbService.getLikedTracks();
     
     setState(() {
@@ -32,16 +32,85 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     });
   }
 
+  void _onRemove(String trackId) {
+    setState(() {
+      _likedTracks.removeWhere((track) => track.trackId == trackId);
+    });
+
+    widget.dbService.updateInteraction(trackId, 0);
+
+    loadPlaylist();
+  }
+
+  void _onRemoveAll() {
+    setState(() => _isLoading = true);
+
+    for (Track track in _likedTracks){
+      if (track.liked == 1) {
+        widget.dbService.updateInteraction(track.trackId, 0);
+      }
+    }
+    
+    loadPlaylist();
+  }
+
+  void _confirmAndResetLikedTracks(BuildContext context) {
+    showDialog(
+      context: context, 
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Confirmer la suppression"),
+          content: const Text("Êtes-vous sûr de vouloir supprimer toute votre like list ? Cette action est iréversible"),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(), 
+              child: const Text("Annuler")
+            ), 
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _onRemoveAll();
+              },
+              child: const Text("Supprimer Tout", style: TextStyle(color: Colors.red)),
+            )
+          ],
+        );
+      }
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text("Ma Playlist"),
-        backgroundColor: Colors.blueAccent,
-        foregroundColor: Colors.white,
+      backgroundColor: widget.mode == "light" ? Color.fromARGB(255, 248, 247, 241) : Colors.black,
+      body: Stack(
+        children: [
+          SafeArea(child: _buildBody(),),
+          _buildOverlayGradient(),
+        ]
       ),
-      body: _buildBody(),
+    );
+  }
+
+  Widget _buildOverlayGradient() {
+    return IgnorePointer(
+      child: Positioned.fill(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
+                widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
+                widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
+                widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+              ],
+              stops: const [0.0, 0.3, 0.85, 1.0],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -58,7 +127,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             Icon(Icons.music_off_rounded, size: 64, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
-              "Pas encore de recommandation",
+              "Pas encore de titres aimés",
               style: TextStyle(fontSize: 18, color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
@@ -71,49 +140,86 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _likedTracks.length,
-      separatorBuilder: (context, index) => const Divider(),
-      itemBuilder: (context, index) {
-        final track = _likedTracks[index];
-        
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                blurRadius: 5,
-                offset: const Offset(0, 2),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Text(
+                'Nombre de musique : ${_likedTracks.length}',
+                style: TextStyle(fontWeight: FontWeight.bold,  color: widget.mode == "light" ? Colors.black : Colors.white),
+                textAlign: TextAlign.left,
+              ),
+              TextButton.icon(
+                onPressed: () => _confirmAndResetLikedTracks(context),
+                icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                label: const Text(
+                  'Supprimer Toute la Liste',
+                  style: TextStyle(color: Colors.red),
+                  textAlign: TextAlign.left,
+                ),
               ),
             ],
           ),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.blueAccent.withOpacity(0.1),
-              child: const Icon(Icons.music_note, color: Colors.blueAccent),
-            ),
-            title: Text(
-              track.trackName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              track.trackArtist,
-              style: TextStyle(color: Colors.grey[700]),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Text(
-              "${track.trackPopularity.toInt()}",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ),
-        );
-      },
+        ),
+
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: _likedTracks.length,
+            separatorBuilder: (context, index) => const Divider(thickness: 0,),
+            itemBuilder: (context, index) {
+              final track = _likedTracks[index];
+
+              return GlassBox(
+                width: MediaQuery.of(context).size.width,
+                borderRadius: BorderRadius.circular(10),
+                padding: 1,
+                mode: widget.mode,
+                child: IntrinsicHeight(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                    leading: Container(
+                      height: 68,
+                      width: 68,
+                      decoration: BoxDecoration(
+                        color: widget.mode == "light" ? Colors.grey[300] : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.music_note, size: 40, color: Colors.grey),
+                    ),
+                    title: Text(
+                      track.trackName,
+                      style: TextStyle(fontWeight: FontWeight.bold, color: widget.mode == "light" ? Colors.black : Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      track.trackArtist,
+                      style: TextStyle(color: widget.mode == "light" ? Colors.grey[700] : Colors.white),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: widget.mode == "light" ? 
+                            const Icon(Icons.delete_outline_outlined, color:  Colors.black):
+                            const Icon(Icons.delete_outline_outlined, color:  Colors.white),
+                          onPressed: () => _onRemove(track.trackId),
+                        ),
+                      ],
+                    ),
+                  ),
+                ) 
+              );
+            }
+          )
+        )
+      ]
     );
   }
 }

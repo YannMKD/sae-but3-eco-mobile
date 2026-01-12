@@ -1,11 +1,5 @@
-/// Fichier: lib/services/database_service.dart
-///
-/// Contient les requêtes SQL (DatabaseQueries) et un service `DatabaseService`
-/// minimal pour ouvrir la base SQLite et exposer les méthodes utilisées par
-/// l'interface (countInteractions, getColdStartTracks, getHybridRecommendations,
-/// updateInteraction).
-
 import 'dart:io';
+import 'package:path/path.dart' show dirname;
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite/sqflite.dart';
@@ -23,7 +17,7 @@ class DatabaseQueries {
     ''';
 
     static const String coldStartTracks = '''
-        SELECT
+        SELECT DISTINCT
                 track_id, 
                 track_name, 
                 track_artist,
@@ -34,7 +28,7 @@ class DatabaseQueries {
         FROM 
                 tracks
         WHERE
-                liked = 0 
+                liked = 0 OR liked IS NULL
         ORDER BY
                 track_popularity DESC 
         LIMIT 10;
@@ -57,7 +51,7 @@ class DatabaseQueries {
     ''';
 
     static const String findSimilarTracks = '''
-        SELECT
+        SELECT DISTINCT
                 track_id, track_name, track_artist, Cluster_Style, track_popularity,
                 liked, CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8,
                 (CP1 - ?) * (CP1 - ?) +
@@ -71,7 +65,7 @@ class DatabaseQueries {
         FROM 
                 tracks
         WHERE
-                liked = 0 
+                liked = 0 OR liked IS NULL
         ORDER BY 
                 distance_sq ASC
         LIMIT 7;
@@ -87,36 +81,36 @@ class DatabaseQueries {
     ''';
 
     static const String getLikedTracks = '''
-        SELECT
-                track_id, 
-                track_name, 
+        SELECT DISTINCT
+                track_id,
+                track_name,
                 track_artist,
                 Cluster_Style,
                 track_popularity,
                 liked,
                 CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8
-        FROM 
+        FROM
                 tracks
         WHERE
-                liked = 1 
+                liked = 1
         ORDER BY
                 track_popularity DESC;
     ''';
 
     static const String findArtistTracks = '''
         SELECT
-                track_id, 
-                track_name, 
+                track_id,
+                track_name,
                 track_artist,
                 Cluster_Style,
                 track_popularity,
                 liked,
                 CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8
-        FROM 
+        FROM
                 tracks
         WHERE
-                liked = 0 
-                AND track_artist IN (?) // Placeholder qui sera remplacé par ('Artiste A', 'Artiste B', ...)
+                liked = 0
+                AND track_artist IN (?)
         ORDER BY
                 track_popularity DESC
         LIMIT 3;
@@ -141,34 +135,27 @@ class DatabaseService {
         final databasesPath = await getDatabasesPath();
         final path = '$databasesPath/$dbFileName';
 
-    if (await databaseExists(path)) {
         try {
-            print('*** DEBUG BDD: Fichier existant trouvé. Tentative de suppression...'); 
-            await deleteDatabase(path); 
-            print('*** DEBUG BDD: Suppression réussie.');
-        } catch (e) {
-             print('*** DEBUG BDD: Échec de la suppression: $e');
-        }
-    }
-
-    try {
-        final exists = await databaseExists(path); 
-        if (!exists) {
-            print('*** DEBUG BDD: Fichier non existant. Copie de l\'asset...'); 
-            try {
-                final data = await rootBundle.load('assets/$dbFileName');
-                final bytes = data.buffer.asUint8List();
-                final file = File(path);
-                await file.create(recursive: true);
-                await file.writeAsBytes(bytes, flush: true);
-                print('*** DEBUG BDD: Copie de l\'asset terminée.'); 
-            } catch (e) {
-                print('*** DEBUG BDD: ÉCHEC CRITIQUE de la copie de l\'asset: $e');
+            final exists = await databaseExists(path);
+            if (!exists) {
+                print('*** DEBUG BDD: Fichier non existant. Copie de l\'asset...');
+                try {
+                    final data = await rootBundle.load('assets/$dbFileName');
+                    final bytes = data.buffer.asUint8List();
+                    await Directory(dirname(path)).create(recursive: true);
+                    final file = File(path);
+                    await file.writeAsBytes(bytes, flush: true);
+                    print('*** DEBUG BDD: Copie de l\'asset terminée.');
+                } catch (e) {
+                    print('*** DEBUG BDD: ÉCHEC CRITIQUE de la copie de l\'asset: $e');
+                }
+            } else {
+                print('*** DEBUG BDD: Fichier existant trouvé. Conservation de la BD et des données.');
             }
-        } else {
-            print('*** DEBUG BDD: Fichier existant trouvé APRÈS suppression. Utilisation de l\'ancien fichier corrompu.'); // -> AJOUTER CECI
+        } catch (e) {
+            print('*** DEBUG BDD: Erreur lors de l\'initialisation: $e');
         }
-    } catch (_) {}
+
         final db = await openDatabase(path);
         return DatabaseService._(db);
     }
@@ -178,16 +165,43 @@ class DatabaseService {
         return Sqflite.firstIntValue(rows) ?? 0;
     }
 
-    Future<List<Track>> getColdStartTracks() async {
-        final rows = await _db.rawQuery(DatabaseQueries.coldStartTracks);
+    Future<List<Track>> getColdStartTracks({List<String>? excludeTrackIds}) async {
+        final excludeIds = excludeTrackIds ?? [];
+        final interactedRows = await _db.rawQuery('SELECT track_id FROM tracks WHERE liked != 0');
+        final interactedIds = interactedRows.map((r) => r['track_id'] as String).toSet();
+        excludeIds.addAll(interactedIds);
+
+        String query = DatabaseQueries.coldStartTracks;
+        List<dynamic> params = [];
+
+        if (excludeIds.isNotEmpty) {
+            final placeholders = List.filled(excludeIds.length, '?').join(',');
+            query = query.replaceFirst('WHERE', 'WHERE track_id NOT IN ($placeholders) AND');
+            params = excludeIds;
+        }
+
+        final rows = await _db.rawQuery(query, params);
         return rows.map((r) => Track.fromMap(r)).toList();
     }
 
-    Future<List<Track>> getHybridRecommendations() async {
+    Future<List<String>> getLikedArtists() async {
+        final rows = await _db.rawQuery(DatabaseQueries.getLikedArtists);
+        return rows.map((r) => r['track_artist'] as String).toList();
+    }
+
+    Future<List<Track>> getArtistRecommendations(List<String> artists) async {
+        if (artists.isEmpty) return [];
+        final placeholders = List.filled(artists.length, '?').join(',');
+        final query = DatabaseQueries.findArtistTracks.replaceFirst('(?)', '($placeholders)');
+        final rows = await _db.rawQuery(query, artists);
+        return rows.map((r) => Track.fromMap(r)).toList();
+    }
+
+    Future<List<Track>> getHybridRecommendations({List<String>? excludeTrackIds}) async {
         final profileRows = await _db.rawQuery(DatabaseQueries.calculateProfileVector);
         if (profileRows.isEmpty) return [];
 
-        final profile = ProfileVector.fromMap(profileRows.first); 
+        final profile = ProfileVector.fromMap(profileRows.first);
         final avgList = profile.toSqlParams();
 
         final params = <dynamic>[];
@@ -196,8 +210,45 @@ class DatabaseService {
             params.add(v);
         }
 
-        final rows = await _db.rawQuery(DatabaseQueries.findSimilarTracks, params);
-        return rows.map((r) => Track.fromMap(r)).toList();
+        // 70% vector recommendations
+        final vectorRows = await _db.rawQuery(DatabaseQueries.findSimilarTracks, params);
+        final vectorTracks = vectorRows.map((r) => Track.fromMap(r)).toList();
+
+        // 30% artist recommendations
+        final likedArtists = await getLikedArtists();
+        final artistTracks = await getArtistRecommendations(likedArtists);
+
+        // Combine: 7 vector + 3 artist = 10 tracks
+        final combined = <Track>[];
+        combined.addAll(vectorTracks.take(7));
+        combined.addAll(artistTracks.take(3));
+
+        // Remove duplicates by trackId
+        final seenTrackIds = <String>{};
+        combined.retainWhere((track) {
+            if (seenTrackIds.contains(track.trackId)) {
+                return false;
+            }
+            seenTrackIds.add(track.trackId);
+            return true;
+        });
+
+        // Exclude already interacted tracks or specified tracks
+        final excludeIds = excludeTrackIds ?? [];
+        final interactedRows = await _db.rawQuery('SELECT track_id FROM tracks WHERE liked != 0');
+        final interactedIds = interactedRows.map((r) => r['track_id'] as String).toSet();
+        excludeIds.addAll(interactedIds);
+
+        combined.removeWhere((track) => excludeIds.contains(track.trackId));
+
+        // Shuffle and filter for discovery (80% popular, 20% discovery)
+        combined.shuffle();
+        final popular = combined.where((t) => t.trackPopularity > 50).take((combined.length * 0.8).round());
+        final discovery = combined.where((t) => t.trackPopularity <= 50).take((combined.length * 0.2).round());
+        final finalList = [...popular, ...discovery];
+        finalList.shuffle();
+
+        return finalList;
     }
 
     Future<void> updateInteraction(String trackId, int status) async {
