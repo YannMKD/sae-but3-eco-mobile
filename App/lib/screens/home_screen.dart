@@ -1,10 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/models/star.dart';
+import 'package:flutter_application_1/models/starfield_painter.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 import 'dart:math' as math;
 
-// ========== CONSTANTES ==========
 class _CardConstants {
   static const double width = 350;
   static const double height = 450;
@@ -12,7 +13,7 @@ class _CardConstants {
   static const double swipeThreshold = 100.0;
   static const double maxRotationAngle = 20.0;
   static const double dragRotationDivisor = 500.0;
-  static const Duration animationDuration = Duration(milliseconds: 250); // Légèrement augmenté pour la fluidité
+  static const Duration animationDuration = Duration(milliseconds: 250);
   static const double nextCardScale = 0.9;
 }
 
@@ -40,13 +41,14 @@ class _Colors {
 class MyHomeScreen extends StatefulWidget {
   final DatabaseService dbService;
   final String mode;
-  const MyHomeScreen({super.key, required this.dbService, required this.mode});
+  final List<Track>? initialTracks;
+  const MyHomeScreen({super.key, required this.dbService, required this.mode, this.initialTracks,});
 
   @override
   State<MyHomeScreen> createState() => _MyHomeScreenState();
 }
 
-class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderStateMixin {
+class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixin {
   bool _isLoading = true;
   int _currentTrackIndex = 0;
   List<Track> _recommendations = [];
@@ -54,20 +56,92 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
 
   final ValueNotifier<double> _dragXNotifier = ValueNotifier<double>(0.0);
   late final AnimationController _animationController;
+  late AnimationController _starController;
+
+  Offset? _touchPosition;
+  List<Star> _stars = [];
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_stars.isEmpty) {
+  final size = MediaQuery.of(context).size;
+  _stars = List.generate(1500, (i) { 
+    final size = MediaQuery.of(context).size;
+    const double margin = 100.0;
+    
+    final double initialX = (math.Random().nextDouble() * (size.width + 2 * margin)) - margin;
+    final double initialY = math.Random().nextDouble() * size.height;
+    
+    return Star(
+      initialX, 
+      initialY, 
+      math.Random().nextDouble() * 1.5, 
+      math.Random().nextDouble(),
+      initialX,
+      initialY,
+    );
+  });
+  }
+  }
+
+@override
+void initState() {
+  super.initState();
+  
+  if (widget.initialTracks != null && widget.initialTracks!.isNotEmpty) {
+    _recommendations = List.from(widget.initialTracks!);
+    _shownTrackIds.addAll(_recommendations.map((t) => t.trackId));
+    _isLoading = false;
+  } else {
+    _fetchHybridRecommendations(isInitial: true);
+  }
+  
+  _starController = AnimationController(vsync: this, duration: const Duration(milliseconds: 100))
+    ..addListener(() {
+      setState(() {
+        final size = MediaQuery.of(context).size;
+        final double w = size.width;
+        
+        const double margin = 250.0;
+        final double worldWidth = w + 2 * margin;
+
+        for (var star in _stars) {
+          star.originX += star.velocityX;
+
+          if (star.originX < -margin) {
+            star.originX += worldWidth;
+            star.x += worldWidth;
+          } else if (star.originX > w + margin) {
+            star.originX -= worldWidth;
+            star.x -= worldWidth;
+          }
+
+          if (!_isWarping) {
+            star.velocityX *= 0.4; 
+
+            star.angle += 0.005;
+            star.originX += math.cos(star.angle) * 0.05;
+            star.originY += math.sin(star.angle) * 0.05;
+          }
+        }
+      });
+    })
+    ..repeat();
+
     _animationController = AnimationController(
       vsync: this,
       duration: _CardConstants.animationDuration,
     );
-    _fetchHybridRecommendations(isInitial: true);
   }
+
+  bool _showLikeOverlay = false;
+  bool _showDislikeOverlay = false;
 
   @override
   void dispose() {
     _animationController.dispose();
+    _starController.dispose();
     _dragXNotifier.dispose();
     super.dispose();
   }
@@ -89,8 +163,44 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
     }
   }
 
+  bool _isWarping = false;
+
+  void _triggerStarWarp(bool liked) {
+  double force = liked ? 400.0 : -400.0; 
+
+  setState(() {
+    _isWarping = true;
+    for (var star in _stars) {
+      star.velocityX = force * (math.Random().nextDouble() * 1.5 + 1.0);
+    }
+  });
+
+  Future.delayed(const Duration(milliseconds: 80), () {
+    if (mounted) {
+      setState(() => _isWarping = false);
+    }
+  });
+}
+
   void _onSwipe(bool liked) async {
     if (_recommendations.isEmpty) return;
+
+    _triggerStarWarp(liked);
+
+    setState(() {
+      if (liked) _showLikeOverlay = true;
+      else _showDislikeOverlay = true;
+    });
+
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) {
+        setState(() {
+          _showLikeOverlay = false;
+          _showDislikeOverlay = false;
+        });
+      }
+    });
+
     await widget.dbService.updateInteraction(_recommendations[_currentTrackIndex].trackId, liked ? 1 : -1);
 
     setState(() {
@@ -125,6 +235,29 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
 
   void _onButtonSwipe(bool liked) => _animateAndCompleteSwipe(liked);
 
+  Widget _buildSwipeOverlay({required bool isLike}) {
+    return Positioned(
+      left: isLike ? null : 0,
+      right: isLike ? 0 : null,
+      top: 0,
+      bottom: 0,
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.1,
+        decoration: BoxDecoration(
+          color: isLike ? Colors.grey.withOpacity(0.45) : Colors.grey.withOpacity(0.3),
+          borderRadius: BorderRadius.only(topLeft: Radius.circular(isLike ? MediaQuery.of(context).size.height /2 : 0), topRight: Radius.circular(isLike ? 0 : MediaQuery.of(context).size.height /2), bottomLeft: Radius.circular(isLike ? MediaQuery.of(context).size.height /2 : 0), bottomRight: Radius.circular(isLike ? 0 : MediaQuery.of(context).size.height /2)),
+        ),
+        child: Center(
+          child: Icon(
+            isLike ? Icons.favorite : Icons.close,
+            color: Colors.white,
+            size: 25,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTrackCard(Track track) {
     return Container(
       width: _CardConstants.width,
@@ -153,58 +286,57 @@ class _MyHomeScreenState extends State<MyHomeScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black ,
-        body: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(
-              widget.mode == "light" ? Colors.black : Colors.white,
-            ),
-          )
-        )
-      );
-    }
-    if (_currentTrackIndex >= _recommendations.length) {
-       return Scaffold(
-        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black ,
-        body: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(
-              widget.mode == "light" ? Colors.black : Colors.white,
-            ),
-          )
-        )
-      );
-    }
+    Widget centralContent;
 
-    final currentTrack = _recommendations[_currentTrackIndex];
-    final nextTrack = (_currentTrackIndex + 1 < _recommendations.length) ? _recommendations[_currentTrackIndex + 1] : null;
+    if (_isLoading || _currentTrackIndex >= _recommendations.length) {
+      centralContent = Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(
+            widget.mode == "light" ? Colors.black : Colors.white,
+          ),
+        ),
+      );
+    } else {
+      final currentTrack = _recommendations[_currentTrackIndex];
+      final nextTrack = (_currentTrackIndex + 1 < _recommendations.length) 
+          ? _recommendations[_currentTrackIndex + 1] 
+          : null;
+
+      centralContent = Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildCardStackNotifier(currentTrack, nextTrack),
+          const SizedBox(height: 15),
+          _buildActionButtons(),
+        ],
+      );
+    }
 
     return Scaffold(
-      backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Image.asset(
-              widget.mode == "light" ? 'assets/images/background-offwhite.jpg' : "assets/images/background-black.jpg", 
-              fit: BoxFit.cover
-            )
-          ),
-          _buildOverlayGradient(),
-          SafeArea(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildCardStackNotifier(currentTrack, nextTrack),
-                  const SizedBox(height: 15),
-                  _buildActionButtons(),
-                ],
+      backgroundColor: widget.mode == "light" 
+          ? const Color.fromARGB(255, 248, 247, 241) 
+          : Colors.black,
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerMove: (e) => setState(() => _touchPosition = e.localPosition),
+        onPointerUp: (e) => setState(() => _touchPosition = null),
+        onPointerCancel: (e) => setState(() => _touchPosition = null),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: StarFieldPainter(_touchPosition, _stars, widget.mode),
               ),
             ),
-          ),
-        ],
+            _buildOverlayGradient(),
+            SafeArea(
+              child: centralContent,
+            ),
+
+            if (_showLikeOverlay) _buildSwipeOverlay(isLike: true),
+            if (_showDislikeOverlay) _buildSwipeOverlay(isLike: false),
+          ],
+        ),
       ),
     );
   }

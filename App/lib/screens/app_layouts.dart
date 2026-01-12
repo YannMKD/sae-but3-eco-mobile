@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/models/track.dart';
 import 'home_screen.dart';
 import 'playlist_screen.dart';
 import '../services/database_service.dart';
@@ -7,7 +8,8 @@ import '../models/glass_box.dart';
 class AppLayout extends StatefulWidget {
   final DatabaseService dbService;
   String mode;
-  AppLayout({super.key, required this.dbService, required this.mode});
+  final List<Track>? initialTracks;
+  AppLayout({super.key, required this.dbService, required this.mode, this.initialTracks});
 
   @override
   State<AppLayout> createState() => _AppLayoutState();
@@ -20,7 +22,7 @@ class _AppLayoutState extends State<AppLayout> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
-      MyHomeScreen(dbService: widget.dbService, mode: widget.mode),
+      MyHomeScreen(dbService: widget.dbService, mode: widget.mode, initialTracks: widget.initialTracks,),
       PlaylistScreen(key: playlistKey, dbService: widget.dbService, mode: widget.mode),
     ];
 

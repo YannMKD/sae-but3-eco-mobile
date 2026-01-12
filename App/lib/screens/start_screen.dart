@@ -15,16 +15,38 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 5), () {
+    _prepareDataAndNavigate();
+  }
+
+  Future<void> _prepareDataAndNavigate() async {
+    final startTime = DateTime.now();
+
+    try {
+      final int interactionCount = await widget.dbService.countInteractions();
+      final initialTracks = interactionCount < 5
+          ? await widget.dbService.getColdStartTracks(excludeTrackIds: List<String>.empty(growable: true))
+          : await widget.dbService.getHybridRecommendations(excludeTrackIds: List<String>.empty(growable: true));
+
+      final elapsed = DateTime.now().difference(startTime);
+      if (elapsed.inSeconds < 2) {
+        await Future.delayed(Duration(seconds: 2 - elapsed.inSeconds));
+      }
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => AppLayout(dbService: widget.dbService, mode:widget.mode),
+            builder: (context) => AppLayout(
+              dbService: widget.dbService, 
+              mode: widget.mode,
+              initialTracks: initialTracks,
+            ),
           ),
         );
       }
-    });
+    } catch (e) {
+      print("Erreur de chargement: $e");
+    }
   }
 
   @override
@@ -37,7 +59,7 @@ class _SplashScreenState extends State<SplashScreen> {
           children: [
             Image.asset(
               widget.mode == "light" ? 'assets/images/TRACKSTAR sans typo 1.png' : 'assets/images/TRACKSTAR variant sans typo 1.png',
-              width: 80,
+              width: 40,
             ),
           ],
         ),
