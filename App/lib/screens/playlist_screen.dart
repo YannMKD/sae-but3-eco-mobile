@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/models/glass_box.dart';
+import 'package:trackstar/models/glass_box.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 
@@ -60,6 +60,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text("Confirmer la suppression"),
+          backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
           content: const Text("Êtes-vous sûr de vouloir supprimer toute votre like list ? Cette action est iréversible"),
           actions: <Widget>[
             TextButton(
@@ -71,7 +72,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
                 Navigator.of(context).pop();
                 _onRemoveAll();
               },
-              child: const Text("Supprimer Tout", style: TextStyle(color: Colors.red)),
+              child: const Text("Supprimer tout", style: TextStyle(color: Colors.red)),
             )
           ],
         );
@@ -148,7 +149,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Text(
-                'Nombre de musique : ${_likedTracks.length}',
+                'Nombre de titres : ${_likedTracks.length}',
                 style: TextStyle(fontWeight: FontWeight.bold,  color: widget.mode == "light" ? Colors.black : Colors.white),
                 textAlign: TextAlign.left,
               ),
@@ -169,7 +170,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: _likedTracks.length,
-            separatorBuilder: (context, index) => const Divider(thickness: 0,),
+            separatorBuilder: (context, index) => const Divider(thickness: 0),
             itemBuilder: (context, index) {
               final track = _likedTracks[index];
 

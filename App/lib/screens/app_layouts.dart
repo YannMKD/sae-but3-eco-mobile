@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/models/track.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trackstar/models/track.dart';
 import 'home_screen.dart';
 import 'playlist_screen.dart';
 import '../services/database_service.dart';
@@ -10,6 +11,8 @@ class AppLayout extends StatefulWidget {
   String mode;
   final List<Track>? initialTracks;
   AppLayout({super.key, required this.dbService, required this.mode, this.initialTracks});
+
+  final prefs = SharedPreferences.getInstance();
 
   @override
   State<AppLayout> createState() => _AppLayoutState();
@@ -52,6 +55,7 @@ class _AppLayoutState extends State<AppLayout> {
               onPressed: () {
                 setState(() {
                   widget.mode = (widget.mode == "light") ? "dark" : "light";
+                  widget.prefs.then((prefs) => prefs.setString('theme_mode', widget.mode));
                 });
               },
             ),

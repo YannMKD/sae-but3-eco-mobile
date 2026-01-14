@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/models/star.dart';
+import 'package:trackstar/models/star.dart';
 
 class StarFieldPainter extends CustomPainter {
   final Offset? touchPosition;

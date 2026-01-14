@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/models/star.dart';
-import 'package:flutter_application_1/models/starfield_painter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:trackstar/models/glass_box.dart';
+import 'package:trackstar/models/star.dart';
+import 'package:trackstar/models/starfield_painter.dart';
+import 'package:trackstar/models/swipe_icon_particle.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 import 'dart:math' as math;
@@ -58,46 +62,52 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
   late final AnimationController _animationController;
   late AnimationController _starController;
 
+  List<SwipeIconParticle> _swipeParticles = [];
+  late AnimationController _particleController;
+
   Offset? _touchPosition;
   List<Star> _stars = [];
+
+  int _tutoSwipeCount = 0;
+  bool _isTutoActive = true;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_stars.isEmpty) {
-  final size = MediaQuery.of(context).size;
-  _stars = List.generate(1500, (i) { 
-    final size = MediaQuery.of(context).size;
-    const double margin = 100.0;
+      final size = MediaQuery.of(context).size;
+      _stars = List.generate(1500, (i) { 
+        final size = MediaQuery.of(context).size;
+        const double margin = 100.0;
+        
+        final double initialX = (math.Random().nextDouble() * (size.width + 2 * margin)) - margin;
+        final double initialY = math.Random().nextDouble() * size.height;
     
-    final double initialX = (math.Random().nextDouble() * (size.width + 2 * margin)) - margin;
-    final double initialY = math.Random().nextDouble() * size.height;
-    
-    return Star(
-      initialX, 
-      initialY, 
-      math.Random().nextDouble() * 1.5, 
-      math.Random().nextDouble(),
-      initialX,
-      initialY,
-    );
-  });
-  }
+        return Star(
+          initialX, 
+          initialY, 
+          math.Random().nextDouble() * 1.5, 
+          math.Random().nextDouble(),
+          initialX,
+          initialY,
+        );
+      });
+    }
   }
 
-@override
-void initState() {
-  super.initState();
+  @override
+  void initState() {
+    super.initState();
+    
+    if (widget.initialTracks != null && widget.initialTracks!.isNotEmpty) {
+      _recommendations = List.from(widget.initialTracks!);
+      _shownTrackIds.addAll(_recommendations.map((t) => t.trackId));
+      _isLoading = false;
+    } else {
+      _fetchHybridRecommendations(isInitial: true);
+    }
   
-  if (widget.initialTracks != null && widget.initialTracks!.isNotEmpty) {
-    _recommendations = List.from(widget.initialTracks!);
-    _shownTrackIds.addAll(_recommendations.map((t) => t.trackId));
-    _isLoading = false;
-  } else {
-    _fetchHybridRecommendations(isInitial: true);
-  }
-  
-  _starController = AnimationController(vsync: this, duration: const Duration(milliseconds: 100))
+    _starController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200))
     ..addListener(() {
       setState(() {
         final size = MediaQuery.of(context).size;
@@ -117,26 +127,39 @@ void initState() {
             star.x -= worldWidth;
           }
 
-          if (!_isWarping) {
-            star.velocityX *= 0.4; 
+          star.velocityX *= 0.4; 
 
-            star.angle += 0.005;
-            star.originX += math.cos(star.angle) * 0.05;
-            star.originY += math.sin(star.angle) * 0.05;
-          }
+          star.angle += 0.005;
+          star.originX += math.cos(star.angle) * 0.05;
+          star.originY += math.sin(star.angle) * 0.05;
         }
       });
     })
     ..repeat();
+
+    _particleController = AnimationController(
+      vsync: this, 
+      duration: const Duration(milliseconds: 500)
+    )..addListener(() {
+        if (_swipeParticles.isNotEmpty) {
+          setState(() {
+            for (var p in _swipeParticles) {
+              p.x += p.vx;
+              p.y += p.vy;
+              
+              p.vx *= 0.82; 
+              p.opacity -= 0.06; 
+            }
+            _swipeParticles.removeWhere((p) => p.opacity <= 0);
+          });
+        }
+    });
 
     _animationController = AnimationController(
       vsync: this,
       duration: _CardConstants.animationDuration,
     );
   }
-
-  bool _showLikeOverlay = false;
-  bool _showDislikeOverlay = false;
 
   @override
   void dispose() {
@@ -163,43 +186,19 @@ void initState() {
     }
   }
 
-  bool _isWarping = false;
-
-  void _triggerStarWarp(bool liked) {
-  double force = liked ? 400.0 : -400.0; 
-
-  setState(() {
-    _isWarping = true;
-    for (var star in _stars) {
-      star.velocityX = force * (math.Random().nextDouble() * 1.5 + 1.0);
-    }
-  });
-
-  Future.delayed(const Duration(milliseconds: 80), () {
-    if (mounted) {
-      setState(() => _isWarping = false);
-    }
-  });
-}
-
   void _onSwipe(bool liked) async {
     if (_recommendations.isEmpty) return;
 
-    _triggerStarWarp(liked);
+    _spawnSwipeParticles(liked);
 
-    setState(() {
-      if (liked) _showLikeOverlay = true;
-      else _showDislikeOverlay = true;
-    });
-
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        setState(() {
-          _showLikeOverlay = false;
-          _showDislikeOverlay = false;
-        });
+    if (_isTutoActive) {
+      _tutoSwipeCount++;
+      if (_tutoSwipeCount >= 5) {
+        setState(() => _isTutoActive = false);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('tuto_swipes_done', true);
       }
-    });
+    }
 
     await widget.dbService.updateInteraction(_recommendations[_currentTrackIndex].trackId, liked ? 1 : -1);
 
@@ -211,6 +210,19 @@ void initState() {
     if (_recommendations.length - _currentTrackIndex <= 3) {
       _fetchHybridRecommendations();
     }
+  }
+
+  void _showTutoConclusion() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Tuto terminé !"),
+        content: Text("Tu as compris le principe des swipes. Amuse-toi bien à découvrir de nouveaux morceaux !"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("C'est parti"))
+        ],
+      ),
+    );
   }
 
   void _resetCard() {
@@ -235,26 +247,52 @@ void initState() {
 
   void _onButtonSwipe(bool liked) => _animateAndCompleteSwipe(liked);
 
-  Widget _buildSwipeOverlay({required bool isLike}) {
-    return Positioned(
-      left: isLike ? null : 0,
-      right: isLike ? 0 : null,
-      top: 0,
-      bottom: 0,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.1,
-        decoration: BoxDecoration(
-          color: isLike ? Colors.grey.withOpacity(0.45) : Colors.grey.withOpacity(0.3),
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(isLike ? MediaQuery.of(context).size.height /2 : 0), topRight: Radius.circular(isLike ? 0 : MediaQuery.of(context).size.height /2), bottomLeft: Radius.circular(isLike ? MediaQuery.of(context).size.height /2 : 0), bottomRight: Radius.circular(isLike ? 0 : MediaQuery.of(context).size.height /2)),
-        ),
-        child: Center(
-          child: Icon(
-            isLike ? Icons.favorite : Icons.close,
-            color: Colors.white,
-            size: 25,
+  void _spawnSwipeParticles(bool liked) {
+    final size = MediaQuery.of(context).size;
+    final random = math.Random();
+    
+    setState(() {
+      for (int i = 0; i < 20; i++) {
+        double startX = liked ? size.width : 0; 
+        double startY = random.nextDouble() * size.height * 0.6 + size.height * 0.2;
+        
+        double vx = liked ? -(random.nextDouble() * 12 + 9) : (random.nextDouble() * 12 + 9);
+
+        _swipeParticles.add(SwipeIconParticle(
+          isLike: liked,
+          x: startX,
+          y: startY - size.height * 0.2,
+          vx: vx,
+          vy: 0,
+          angle: liked ? -(math.pi / 2) : (math.pi / 2), 
+          size: random.nextDouble() * 10 + 25,
+        ));
+      }
+    });
+    _particleController.repeat();
+  }
+
+  Widget _buildTutoOverlay() {
+    if (!_isTutoActive) return const SizedBox.shrink();
+
+    return IgnorePointer(
+      child : Positioned.fill(
+        child : Container(
+          width: MediaQuery.of(context).size.width,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.touch_app, size: 80, color: Colors.white),
+              const SizedBox(height: 20),
+              Text(
+                "Swipe pour commencer (${5 - _tutoSwipeCount} restants)",
+                style: TextStyle(color: Colors.white, fontSize: 18),
+              ),
+              const SizedBox(height: 40),
+            ],
           ),
         ),
-      ),
+      )
     );
   }
 
@@ -276,8 +314,6 @@ void initState() {
             Text(track.trackName, style: _TextStyles.titleStyle, maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 5),
             Text(track.trackArtist, style: _TextStyles.artistStyle),
-            const SizedBox(height: 5),
-            Text('Style: ${track.clusterStyle}', style: _TextStyles.infoStyle),
           ],
         ),
       ),
@@ -333,8 +369,28 @@ void initState() {
               child: centralContent,
             ),
 
-            if (_showLikeOverlay) _buildSwipeOverlay(isLike: true),
-            if (_showDislikeOverlay) _buildSwipeOverlay(isLike: false),
+            ..._swipeParticles.map((p) => Positioned(
+              left: p.x,
+              top: p.y,
+              child: Opacity(
+                opacity: p.opacity.clamp(0.0, 1.0),
+                child: Transform.rotate(
+                  angle: p.angle, 
+                  child: Image.asset(
+                    !p.isLike 
+                      ? (widget.mode == "light" 
+                          ? 'assets/images/cross-icon-fill-black.png' 
+                          : 'assets/images/cross-icon-fill-white.png')
+                      : (widget.mode == "light" 
+                          ? 'assets/images/liked-icon-fill-black.png' 
+                          : 'assets/images/liked-icon-fill-white.png'),
+                    width: p.size,
+                    height: p.size,
+                  ),
+                ),
+              ),
+            )).toList(),
+            _buildTutoOverlay()
           ],
         ),
       ),
@@ -401,28 +457,75 @@ void initState() {
     );
   }
 
+  bool _isFavorite = false;
+  bool _isDisliked = false;
+
   Widget _buildActionButtons() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        FloatingActionButton(
-          heroTag: "dislikeBtn",
-          onPressed: () => _onButtonSwipe(false),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child:  widget.mode == "light" ? 
-            const Icon(Icons.close, size: 30, color:  Colors.black) : 
-            const Icon(Icons.close, size: 30, color:  Colors.white),
+        GlassBox(
+          mode: widget.mode, 
+          borderRadius: BorderRadius.circular(20), 
+          padding: 5,
+          child: FloatingActionButton(
+            heroTag: "dislikeBtn",
+            onPressed: () {
+              _isDisliked = true;
+              Timer(const Duration(milliseconds: 400), () {
+                _isDisliked = false;
+              });
+
+              _onButtonSwipe(false);
+            },
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            focusElevation: 0,
+            hoverElevation: 0,
+            highlightElevation: 0,
+            disabledElevation: 0,
+            child: Image.asset(
+              widget.mode == "light" ? 
+                (!_isDisliked 
+                  ? 'assets/images/cross-icon-black.png' 
+                  : 'assets/images/cross-icon-fill-black.png') :
+                (!_isDisliked 
+                  ? 'assets/images/cross-icon-white.png' 
+                  : 'assets/images/cross-icon-fill-white.png'), 
+              width: 42),
+          ),
         ),
         const SizedBox(width: 150),
-        FloatingActionButton(
-          heroTag: "likeBtn",
-          onPressed: () => _onButtonSwipe(true),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: widget.mode == "light" ? 
-            const Icon(Icons.favorite, size: 30, color:  Colors.black) : 
-            const Icon(Icons.favorite, size: 30, color:  Colors.white),
+        GlassBox(
+          mode: widget.mode, 
+          borderRadius: BorderRadius.circular(20), 
+          padding: 5,
+          child: FloatingActionButton(
+            heroTag: "likeBtn",
+            onPressed: () {
+              _isFavorite = true;
+              Timer(const Duration(milliseconds: 400), () {
+                _isFavorite = false;
+              });
+
+              _onButtonSwipe(true);
+            },
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            focusElevation: 0,
+            hoverElevation: 0,
+            highlightElevation: 0,
+            disabledElevation: 0,
+            child: Image.asset(
+              widget.mode == "light" ? 
+                (!_isFavorite 
+                  ? 'assets/images/liked-icon-black.png' 
+                  : 'assets/images/liked-icon-fill-black.png') :
+                (!_isFavorite 
+                  ? 'assets/images/liked-icon-white.png' 
+                  : 'assets/images/liked-icon-fill-white.png'), 
+              width: 60),
+          ),
         ),
       ],
     );

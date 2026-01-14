@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:trackstar/screens/onboarding_screen.dart';
 import 'app_layouts.dart';
 
 class SplashScreen extends StatefulWidget {
   final dynamic dbService;
   final String mode;
-  const SplashScreen({super.key, required this.dbService, required this.mode});
+  final bool startWithOnboarding;
+  const SplashScreen({super.key, required this.dbService, required this.mode, required this.startWithOnboarding});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -33,16 +35,29 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AppLayout(
-              dbService: widget.dbService, 
-              mode: widget.mode,
-              initialTracks: initialTracks,
+        if (widget.startWithOnboarding) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OnboardingScreen(
+                dbService: widget.dbService, 
+                mode: widget.mode,
+                initialTracks: initialTracks,
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AppLayout(
+                dbService: widget.dbService, 
+                mode: widget.mode,
+                initialTracks: initialTracks,
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       print("Erreur de chargement: $e");
