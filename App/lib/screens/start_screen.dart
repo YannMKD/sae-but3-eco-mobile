@@ -1,21 +1,59 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:trackstar/screens/onboarding_screen.dart';
 import 'app_layouts.dart';
 
 class SplashScreen extends StatefulWidget {
   final dynamic dbService;
   final String mode;
-  const SplashScreen({super.key, required this.dbService, required this.mode});
+  final bool startWithOnboarding;
+  const SplashScreen({super.key, required this.dbService, required this.mode, required this.startWithOnboarding});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
   @override
   void initState() {
     super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      reverseDuration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(
+      reverse: true,
+    ); 
+
+    _animation = Tween<double>(begin: 1.1, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Interval(0.0, 0.3, curve: Curves.easeInOut)),
+    );
+
     _prepareDataAndNavigate();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _navigateToNext(Widget nextScreen) {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => nextScreen,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 1500),
+      ),
+    );
   }
 
   Future<void> _prepareDataAndNavigate() async {
@@ -30,20 +68,25 @@ class _SplashScreenState extends State<SplashScreen> {
       final elapsed = DateTime.now().difference(startTime);
       if (elapsed.inSeconds < 2) {
         await Future.delayed(Duration(seconds: 2 - elapsed.inSeconds));
-      }
+      } 
 
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AppLayout(
+      Timer(const Duration(seconds: 5), () {
+        if (mounted) {
+          if (widget.startWithOnboarding) {
+            _navigateToNext(OnboardingScreen(
               dbService: widget.dbService, 
               mode: widget.mode,
               initialTracks: initialTracks,
-            ),
-          ),
-        );
-      }
+            ),);
+          } else {
+            _navigateToNext( AppLayout(
+              dbService: widget.dbService, 
+              mode: widget.mode,
+              initialTracks: initialTracks,
+            ),);
+          }
+        }
+      });
     } catch (e) {
       print("Erreur de chargement: $e");
     }
@@ -57,10 +100,13 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              widget.mode == "light" ? 'assets/images/TRACKSTAR sans typo 1.png' : 'assets/images/TRACKSTAR variant sans typo 1.png',
-              width: 40,
-            ),
+            ScaleTransition(
+              scale: _animation,
+              child: Image.asset(
+                widget.mode == "light" ? 'assets/images/TRACKSTAR sans typo 1.png' : 'assets/images/TRACKSTAR variant sans typo 1.png',
+                width: 40,
+              ),
+            )
           ],
         ),
       ),

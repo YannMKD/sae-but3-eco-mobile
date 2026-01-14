@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/services/database_service.dart';
+import 'package:trackstar/services/database_service.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/main.dart';
+import 'package:trackstar/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -11,7 +11,7 @@ void main() {
 
     final String savedMode = prefs.getString('theme_mode') ?? "dark";
     
-    await tester.pumpWidget(MyApp(dbService: dbService, initialMode: savedMode,));
+    await tester.pumpWidget(MyApp(dbService: dbService, initialMode: savedMode, startWithOnboarding: true));
 
     expect(find.text('0'), findsOneWidget);
     expect(find.text('1'), findsNothing);
