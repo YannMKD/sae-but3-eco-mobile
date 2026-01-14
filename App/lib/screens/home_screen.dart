@@ -71,11 +71,14 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
   int _tutoSwipeCount = 0;
   bool _isTutoActive = true;
 
+  bool _tutoIconVisible = true;
+  late AnimationController _tutoAnimationController;
+  late Animation<Offset> _tutoSlideAnimation;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_stars.isEmpty) {
-      final size = MediaQuery.of(context).size;
       _stars = List.generate(1500, (i) { 
         final size = MediaQuery.of(context).size;
         const double margin = 100.0;
@@ -155,6 +158,22 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
         }
     });
 
+    _tutoAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4500),
+    );
+
+    _tutoSlideAnimation = TweenSequence<Offset>([
+      TweenSequenceItem(tween: Tween(begin: Offset.zero, end: const Offset(-0.25, 0.0)).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: const Offset(-0.25, 0.0), end: const Offset(0.25, 0.0)).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: const Offset(0.25, 0.0), end: Offset.zero).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+    ]).animate(CurvedAnimation(
+      parent: _tutoAnimationController,
+      curve: Interval(0.0, 0.5, curve: Curves.easeInOut),
+    ));
+
+    _tutoAnimationController.repeat();
+
     _animationController = AnimationController(
       vsync: this,
       duration: _CardConstants.animationDuration,
@@ -166,6 +185,7 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
     _animationController.dispose();
     _starController.dispose();
     _dragXNotifier.dispose();
+    _tutoAnimationController.dispose();
     super.dispose();
   }
 
@@ -191,12 +211,24 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
 
     _spawnSwipeParticles(liked);
 
+    setState(() => _tutoIconVisible = false);
+
+    Timer(const Duration(seconds: 10), () {
+      if (mounted && _isTutoActive) {
+        setState(() => _tutoIconVisible = true);
+      }
+    });
+
     if (_isTutoActive) {
       _tutoSwipeCount++;
       if (_tutoSwipeCount >= 5) {
-        setState(() => _isTutoActive = false);
+        setState(() {
+          _isTutoActive = false;
+          _tutoIconVisible = false;
+        });
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('tuto_swipes_done', true);
+        _showTutoConclusion();
       }
     }
 
@@ -216,10 +248,12 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Tuto terminé !"),
-        content: Text("Tu as compris le principe des swipes. Amuse-toi bien à découvrir de nouveaux morceaux !"),
+        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        title: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Très bien !"),
+        content: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Les paramétrages sont terminés. Nous vous recommanderons désormais des titres selon vos nouvelles préférences !"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text("C'est parti"))
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Commencer"))
         ],
       ),
     );
@@ -276,19 +310,20 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
     if (!_isTutoActive) return const SizedBox.shrink();
 
     return IgnorePointer(
-      child : Positioned.fill(
-        child : Container(
-          width: MediaQuery.of(context).size.width,
+      child: Positioned.fill(
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 150),
+          opacity: _tutoIconVisible ? 1.0 : 0.0,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.touch_app, size: 80, color: Colors.white),
-              const SizedBox(height: 20),
-              Text(
-                "Swipe pour commencer (${5 - _tutoSwipeCount} restants)",
-                style: TextStyle(color: Colors.white, fontSize: 18),
+              Center(
+                child: SlideTransition(
+                  position: _tutoSlideAnimation,
+                  child: const Icon(Icons.touch_app, size: 50, color: Colors.white),
+                ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 80),
             ],
           ),
         ),
@@ -378,14 +413,13 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
                   angle: p.angle, 
                   child: Image.asset(
                     !p.isLike 
-                      ? (widget.mode == "light" 
-                          ? 'assets/images/cross-icon-fill-black.png' 
-                          : 'assets/images/cross-icon-fill-white.png')
-                      : (widget.mode == "light" 
-                          ? 'assets/images/liked-icon-fill-black.png' 
-                          : 'assets/images/liked-icon-fill-white.png'),
+                      ? 'assets/images/cross-icon-fill-white.png'
+                      : 'assets/images/liked-icon-fill-white.png',
                     width: p.size,
                     height: p.size,
+                    color: !p.isLike
+                      ? Colors.red
+                      : Colors.amberAccent,
                   ),
                 ),
               ),
@@ -485,14 +519,13 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
             highlightElevation: 0,
             disabledElevation: 0,
             child: Image.asset(
-              widget.mode == "light" ? 
-                (!_isDisliked 
-                  ? 'assets/images/cross-icon-black.png' 
-                  : 'assets/images/cross-icon-fill-black.png') :
-                (!_isDisliked 
-                  ? 'assets/images/cross-icon-white.png' 
-                  : 'assets/images/cross-icon-fill-white.png'), 
-              width: 42),
+              !_isDisliked 
+                ? 'assets/images/cross-icon-white.png' 
+                : 'assets/images/cross-icon-fill-white.png', 
+              width: 42,
+              color: !_isDisliked
+                ? widget.mode == "light" ? Colors.black : Colors.white
+                : Colors.red,),
           ),
         ),
         const SizedBox(width: 150),
@@ -517,14 +550,13 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
             highlightElevation: 0,
             disabledElevation: 0,
             child: Image.asset(
-              widget.mode == "light" ? 
-                (!_isFavorite 
-                  ? 'assets/images/liked-icon-black.png' 
-                  : 'assets/images/liked-icon-fill-black.png') :
-                (!_isFavorite 
-                  ? 'assets/images/liked-icon-white.png' 
-                  : 'assets/images/liked-icon-fill-white.png'), 
-              width: 60),
+              !_isFavorite 
+                ? 'assets/images/liked-icon-white.png' 
+                : 'assets/images/liked-icon-fill-white.png', 
+              width: 60,
+              color: !_isFavorite
+                ? widget.mode == "light" ? Colors.black : Colors.white
+                : Colors.amberAccent,),
           ),
         ),
       ],

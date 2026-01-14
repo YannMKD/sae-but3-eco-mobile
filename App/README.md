@@ -1,4 +1,4 @@
-# flutter_application_1
+# Trackstar
 
 A new Flutter project.
 

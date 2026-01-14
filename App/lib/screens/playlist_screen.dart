@@ -59,20 +59,21 @@ class PlaylistScreenState extends State<PlaylistScreen> {
       context: context, 
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text("Confirmer la suppression"),
+          title: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white),"Confirmer la suppression"),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
-          content: const Text("Êtes-vous sûr de vouloir supprimer toute votre like list ? Cette action est iréversible"),
+          content: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Êtes-vous sûr de vouloir supprimer toute votre like list ? Cette action est iréversible"),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(), 
-              child: const Text("Annuler")
+              child: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Annuler")
             ), 
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
                 _onRemoveAll();
               },
-              child: const Text("Supprimer tout", style: TextStyle(color: Colors.red)),
+              child: Text("Supprimer tout", style: TextStyle(color: Colors.red)),
             )
           ],
         );
