@@ -332,25 +332,20 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
   }
 
   Widget _buildTrackCard(Track track) {
-    return Container(
+    return GlassBox(
+      mode: widget.mode,
       width: _CardConstants.width,
       height: _CardConstants.height,
-      decoration: BoxDecoration(
-        color: _Colors.cardBackground,
-        borderRadius: BorderRadius.circular(_CardConstants.borderRadius),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 5))],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(track.trackName, style: _TextStyles.titleStyle, maxLines: 2, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 5),
-            Text(track.trackArtist, style: _TextStyles.artistStyle),
-          ],
-        ),
+      padding: 20,
+      borderRadius: BorderRadius.circular(_CardConstants.borderRadius),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(track.trackName, style: _TextStyles.titleStyle, maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 5),
+          Text(track.trackArtist, style: _TextStyles.artistStyle),
+        ],
       ),
     );
   }
@@ -443,10 +438,20 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
           alignment: Alignment.center,
           children: <Widget>[
             if (next != null)
-              Transform.scale(
-                scale: _CardConstants.nextCardScale + (dragFactor * (1.0 - _CardConstants.nextCardScale)),
-                child: _buildTrackCard(next),
+              Opacity(
+                opacity: 0.3 + (dragFactor * 0.7), 
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: (1 - dragFactor) * 10, 
+                    sigmaY: (1 - dragFactor) * 10,
+                  ),
+                  child: Transform.scale(
+                    scale: _CardConstants.nextCardScale + (dragFactor * (1.0 - _CardConstants.nextCardScale)),
+                    child: _buildTrackCard(next),
+                  ),
+                ),
               ),
+              
             GestureDetector(
               onPanStart: (_) => _animationController.stop(),
               onPanUpdate: (d) => _dragXNotifier.value += d.delta.dx,

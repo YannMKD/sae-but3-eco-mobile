@@ -80,6 +80,8 @@ class GlassBox extends StatelessWidget {
               
               Container(
                 padding: EdgeInsets.all(padding), 
+                width: width, 
+                height: height,
                 decoration: BoxDecoration(
                   borderRadius: borderRadius,
                   border: Border.all(

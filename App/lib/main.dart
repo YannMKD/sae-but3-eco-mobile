@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trackstar/screens/onboarding_screen.dart';
 import 'package:trackstar/screens/start_screen.dart';
@@ -8,6 +9,11 @@ import '../services/database_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); 
 
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   final dbService = await DatabaseService.init(dbFileName: 'app_data.db');
   final prefs = await SharedPreferences.getInstance();
 
@@ -15,7 +21,7 @@ void main() async {
   if (prefs.getString('theme_mode') == null) {
     await prefs.setString('theme_mode', 'dark');
   }
-  
+
   final String savedMode = prefs.getString('theme_mode') ?? "dark";
 
   await PrefsService.resetAllData();
