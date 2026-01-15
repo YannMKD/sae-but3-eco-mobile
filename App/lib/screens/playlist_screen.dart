@@ -340,11 +340,11 @@ class PlaylistScreenState extends State<PlaylistScreen> {
                           controller: _searchController,
                           style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white),
                           decoration: InputDecoration(
-                            hintText: "Rechercher...",
+                            hintText: "Artistes, morceaux...",
                             hintStyle: const TextStyle(color: Colors.grey),
                             prefixIcon: const Icon(Icons.search, color: Colors.grey),
                             border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 5),
                           ),
                           onChanged: (val) {
                             setState(() {
