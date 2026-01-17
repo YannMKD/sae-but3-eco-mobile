@@ -650,43 +650,70 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        _buildCircularButton(
-          icon: !_isDisliked ? 'assets/images/cross-icon-white.png' : 'assets/images/cross-icon-fill-white.png',
-          isDisliked: true,
-          wRatio: wRatio,
-        ),
-        SizedBox(width: 150 * wRatio),
-        _buildCircularButton(
-          icon: !_isFavorite ? 'assets/images/liked-icon-white.png' : 'assets/images/liked-icon-fill-white.png',
-          isDisliked: false,
-          wRatio: wRatio,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCircularButton({required String icon, required bool isDisliked, required double wRatio}) {
-    return GlassBox(
-      mode: widget.mode, 
-      borderRadius: BorderRadius.circular(20 * wRatio), 
-      padding: 5 * wRatio,
-      child: SizedBox(
-        width: 56 * wRatio, 
-        height: 56 * wRatio,
-        child: FloatingActionButton(
-          heroTag: isDisliked ? "dislikeBtn" : "likeBtn",
-          onPressed: () => isDisliked ? _onButtonSwipe(false) : _onButtonSwipe(true),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: Image.asset(
-            icon,
-            width: (isDisliked ? 42 : 60) * wRatio,
-            color: isDisliked 
-              ? (widget.mode == "light" ? (_isDisliked ? Colors.red : Colors.black) : Colors.white)
-              : (widget.mode == "light" ? (_isFavorite ? Colors.deepPurple : Colors.black) : Colors.white),
+        GlassBox(
+          mode: widget.mode, 
+          borderRadius: BorderRadius.circular(20 * wRatio), 
+          padding: 5 * wRatio,
+          child: SizedBox(
+            width: 56 * wRatio, 
+            height: 56 * wRatio,
+            child: FloatingActionButton(
+              heroTag: "dislikeBtn",
+              onPressed: () {
+                setState(() => _isDisliked = true); 
+                Timer(const Duration(milliseconds: 400), () {
+                  if (mounted) setState(() => _isDisliked = false);
+                });
+                _onButtonSwipe(false);
+              },
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Image.asset(
+                !_isDisliked 
+                  ? 'assets/images/cross-icon-white.png' 
+                  : 'assets/images/cross-icon-fill-white.png', 
+                width: 42 * wRatio, 
+                color: !_isDisliked
+                  ? (widget.mode == "light" ? Colors.black : Colors.white)
+                  : (widget.mode == "light" ? Colors.red : Colors.white),
+              ),
+            ),
           ),
         ),
-      ),
+        
+        SizedBox(width: 150 * wRatio), 
+        
+        GlassBox(
+          mode: widget.mode, 
+          borderRadius: BorderRadius.circular(20 * wRatio), 
+          padding: 5 * wRatio,
+          child: SizedBox(
+            width: 56 * wRatio,
+            height: 56 * wRatio,
+            child: FloatingActionButton(
+              heroTag: "likeBtn",
+              onPressed: () {
+                setState(() => _isFavorite = true);
+                Timer(const Duration(milliseconds: 400), () {
+                  if (mounted) setState(() => _isFavorite = false);
+                });
+                _onButtonSwipe(true);
+              },
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Image.asset(
+                !_isFavorite 
+                  ? 'assets/images/liked-icon-white.png' 
+                  : 'assets/images/liked-icon-fill-white.png',
+                width: 60 * wRatio, 
+                color: !_isFavorite
+                  ? (widget.mode == "light" ? Colors.black : Colors.white)
+                  : (widget.mode == "light" ? Colors.deepPurple : Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
