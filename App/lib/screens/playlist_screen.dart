@@ -6,8 +6,9 @@ import '../models/track.dart';
 class PlaylistScreen extends StatefulWidget {
   final DatabaseService dbService;
   final String mode;
+  final VoidCallback onNotifyUpdate;
 
-  const PlaylistScreen({super.key, required this.dbService, required this.mode});
+  const PlaylistScreen({super.key, required this.dbService, required this.mode, required this.onNotifyUpdate,});
 
   @override
   State<PlaylistScreen> createState() => PlaylistScreenState();
@@ -32,24 +33,28 @@ class PlaylistScreenState extends State<PlaylistScreen> {
     });
   }
 
-  void _onRemove(String trackId) {
-    setState(() {
+  void _onRemove(String trackId) async {
+   setState(() {
       _likedTracks.removeWhere((track) => track.trackId == trackId);
     });
 
-    widget.dbService.updateInteraction(trackId, 0);
-
+    await widget.dbService.updateInteraction(trackId, 0);
+    
+    widget.onNotifyUpdate(); 
+    
     loadPlaylist();
   }
 
-  void _onRemoveAll() {
+  void _onRemoveAll() async {
     setState(() => _isLoading = true);
 
-    for (Track track in _likedTracks){
+    for (Track track in _likedTracks) {
       if (track.liked == 1) {
-        widget.dbService.updateInteraction(track.trackId, 0);
+        await widget.dbService.updateInteraction(track.trackId, 0);
       }
     }
+    
+    widget.onNotifyUpdate(); 
     
     loadPlaylist();
   }

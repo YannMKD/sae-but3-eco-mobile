@@ -4,66 +4,191 @@ import 'package:trackstar/models/track.dart';
 import 'package:trackstar/screens/app_layouts.dart';
 import 'package:trackstar/services/prefs_service.dart';
 
-class OnboardingScreen extends StatelessWidget {
+class OnboardingScreen extends StatefulWidget {
   final dynamic dbService;
   final String mode;
   final List<Track>? initialTracks;
 
   const OnboardingScreen({super.key, required this.dbService, required this.mode, this.initialTracks});
 
-  void _navigateToNext(Widget nextScreen) {
-    
+  @override
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerProviderStateMixin {
+  final PageController _pageController = PageController();
+  late AnimationController _heartbeatController;
+  late Animation<double> _heartbeatAnimation;
+  late Animation<double> _glowAnimation;
+
+  double _scrollOffset = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController.addListener(() {
+      setState(() {
+        _scrollOffset = _pageController.hasClients ? _pageController.page ?? 0 : 0;
+      });
+    });
+
+    _heartbeatController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4500), 
+    )..repeat();
+
+    _heartbeatAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.15).chain(CurveTween(curve: Curves.easeOutCubic)), 
+        weight: 6,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.15, end: 1.0).chain(CurveTween(curve: Curves.easeInCubic)), 
+        weight: 4,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0), 
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.06).chain(CurveTween(curve: Curves.easeOutCubic)), 
+        weight: 10,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.06, end: 1.0).chain(CurveTween(curve: Curves.easeInCubic)), 
+        weight: 6,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.15).chain(CurveTween(curve: Curves.easeOutCubic)), 
+        weight: 8,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.15, end: 1.0).chain(CurveTween(curve: Curves.easeInCubic)), 
+        weight: 4,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0), 
+        weight: 40,
+      ),
+    ]).animate(_heartbeatController);
+
+    _glowAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.4), weight: 6),
+      TweenSequenceItem(tween: Tween(begin: 0.4, end: 0.1), weight: 4),
+      TweenSequenceItem(tween: Tween(begin: 0.1, end: 0.1), weight: 25),
+      TweenSequenceItem(tween: Tween(begin: 0.1, end: 0.2), weight: 10),
+      TweenSequenceItem(tween: Tween(begin: 0.2, end: 0.0), weight: 6),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.4), weight: 8),
+      TweenSequenceItem(tween: Tween(begin: 0.4, end: 0.1), weight: 4),
+      TweenSequenceItem(tween: ConstantTween<double>(0.0), weight:40),
+    ]).animate(_heartbeatController);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _heartbeatController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final starSize = size.width * 1.8;
+
     return Scaffold(
-      backgroundColor: mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
-      body: PageView(
+      backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+      body: Stack(
         children: [
-          _buildPage(
-            title: "Bienvenue sur Trackstar", 
-            text: "Découvre de nouveaux sons chaque jour.",
-            icon: Icons.music_note,
-          ),
-          _buildPage(
-            title: "Le Geste", 
-            text: "Swipe à droite pour Liker, à gauche pour ignorer.",
-            icon: Icons.swipe,
-          ),
-          _buildPage(
-            title: "Prêt ?", 
-            text: "On commence par 5 titres pour calibrer votre profil.",
-            icon: Icons.rocket_launch,
-            isLast: true,
-            onDone: () async {
-              await PrefsService.setOnboardingComplete();
-              
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => AppLayout(dbService: dbService, mode: mode, initialTracks: initialTracks,),
-                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                      const begin = Offset(1.0, 0.0);
-                      const end = Offset.zero;
-                      const curve = Curves.easeInOutQuart;
-
-                      var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-
-                      return SlideTransition(
-                        position: animation.drive(tween),
-                        child: child,
-                      );
-                    },
-                    transitionDuration: const Duration(milliseconds: 1200),
-                  ),
-                );
-              }
+          AnimatedBuilder(
+            animation: _heartbeatController,
+            builder: (context, child) {
+              return Positioned(
+                top: (size.height - starSize) / 2,
+                left: (size.width / 2) - (starSize / 2) + (size.width * 0.5) - (_scrollOffset * size.width * 0.5),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: starSize * 0.7,
+                      height: starSize * 0.7,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (widget.mode == "light" ? Colors.black : Colors.white)
+                                .withOpacity(_glowAnimation.value),
+                            blurRadius: 60 * _heartbeatAnimation.value,
+                            spreadRadius: 20 * _heartbeatAnimation.value,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Opacity(
+                      opacity: widget.mode == "light" ? 0.3 : 0.6, 
+                      child: Transform.scale(
+                        scale: _heartbeatAnimation.value,
+                        alignment: Alignment.center,
+                        child: Image.asset(
+                          "assets/images/star.png",
+                          width: starSize,
+                          height: starSize,
+                          color: widget.mode == "light" ? Colors.black : Colors.white,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
             },
           ),
+          PageView(
+            controller: _pageController,
+            children: [
+              _buildPage(
+                title: "ACCÈS TRACKSTAR", 
+                text: "Exploration de flux musicaux en temps réel. Accédez à de nouvelles sources sonores chaque jour.",
+                icon: Icons.radar,
+              ),
+              _buildPage(
+                title: "NAVIGATION TACTILE", 
+                text: "Swipe droit pour ajouter le titre dans ta bibliothèque. Swipe gauche pour ignorer et passer à la source suivante.",
+                icon: Icons.swipe,
+              ),
+              _buildPage(
+                title: "CALIBRAGE PROFIL", 
+                text: "Analyse de 5 sources requise pour stabiliser l'algorithme et définir votre trajectoire musicale.",
+                icon: Icons.tune,
+                isLast: true,
+                onDone: () async {
+                  await PrefsService.setOnboardingComplete();
+                  if (context.mounted) {
+                    Navigator.pushReplacement(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) => AppLayout(
+                          dbService: widget.dbService,
+                          mode: widget.mode,
+                          initialTracks: widget.initialTracks,
+                        ),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(1.0, 0.0);
+                          const end = Offset.zero;
+                          const curve = Curves.easeInOutQuart;
+                          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                          return SlideTransition(position: animation.drive(tween), child: child);
+                        },
+                        transitionDuration: const Duration(milliseconds: 1200),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ],
-      ),
+      )
     );
   }
 
@@ -81,14 +206,17 @@ class OnboardingScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 100, color: mode == "light" ? Colors.black : Colors.white),
+              if (isLast) ...[
+                const SizedBox(height: 112),
+              ],
+              Icon(icon, size: 100, color: widget.mode == "light" ? Colors.black : Colors.white),
               const SizedBox(height: 40),
               Text(
                 title,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: mode == "light" ? Colors.black : Colors.white,
+                  color: widget.mode == "light" ? Colors.black : Colors.white,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -97,7 +225,7 @@ class OnboardingScreen extends StatelessWidget {
                 text,
                 style: TextStyle(
                   fontSize: 16,
-                  color: mode == "light" ? Colors.black54 : Colors.white70,
+                  color: widget.mode == "light" ? Colors.black54 : Colors.white70,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -106,8 +234,8 @@ class OnboardingScreen extends StatelessWidget {
                 ElevatedButton(
                   onPressed: onDone,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: mode == "light" ? Colors.black : Colors.white,
-                    foregroundColor: mode == "light" ? Colors.white : Colors.black,
+                    backgroundColor: widget.mode == "light" ? Colors.black : Colors.white,
+                    foregroundColor: widget.mode == "light" ? Colors.white : Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
                   ),
                   child: const Text("Commencer le test"),
@@ -122,7 +250,7 @@ class OnboardingScreen extends StatelessWidget {
             bottom: 0,
             right: 20,
             child: Center(
-              child: _ScrollingArrow(mode: mode)
+              child: _ScrollingArrow(mode: widget.mode)
             ),
           ),
       ],
@@ -151,8 +279,8 @@ class _ScrollingArrowState extends State<_ScrollingArrow> with SingleTickerProvi
     )..repeat();
 
     _animation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 10.0).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 10.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 15.0).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 15.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
     ]).animate(_controller);
   }
 
@@ -169,15 +297,25 @@ class _ScrollingArrowState extends State<_ScrollingArrow> with SingleTickerProvi
       builder: (context, child) {
         return Transform.translate(
           offset: Offset(_animation.value, 0),
-          child: Container(
-            alignment: AlignmentGeometry.centerRight,
-            child: Icon(
-              Icons.arrow_forward_ios,
-              color: widget.mode == "light" ? Colors.black26 : Colors.white24,
-              size: 30,
-            ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.arrow_forward_ios,
+                color: widget.mode == "light" ? Colors.black26 : Colors.white,
+                size: 30,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Swipe",
+                style: TextStyle(
+                  color: widget.mode == "light" ? Colors.black26 : Colors.white,
+                  fontSize: 18,
+                ),
+              ) 
+            ]
           )
-        );
+        ); 
       },
     );
   }

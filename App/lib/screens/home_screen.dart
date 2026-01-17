@@ -21,27 +21,6 @@ class _CardConstants {
   static const double nextCardScale = 0.9;
 }
 
-class _TextStyles {
-  static final artistStyle = TextStyle(
-    fontSize: 18,
-    color: Colors.white70,
-    fontWeight: FontWeight.w300,
-  );
-  static const titleStyle = TextStyle(
-    fontSize: 32,
-    fontWeight: FontWeight.bold,
-    color: Colors.white,
-  );
-  static const infoStyle = TextStyle(
-    fontSize: 14,
-    color: Colors.white60,
-  );
-}
-
-class _Colors {
-  static final cardBackground = Colors.blueGrey.shade700;
-}
-
 class MyHomeScreen extends StatefulWidget {
   final DatabaseService dbService;
   final String mode;
@@ -49,18 +28,16 @@ class MyHomeScreen extends StatefulWidget {
   const MyHomeScreen({super.key, required this.dbService, required this.mode, this.initialTracks,});
 
   @override
-  State<MyHomeScreen> createState() => _MyHomeScreenState();
+  State<MyHomeScreen> createState() => MyHomeScreenState();
 }
 
-class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixin {
+class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixin {
   bool _isLoading = true;
   int _currentTrackIndex = 0;
   List<Track> _recommendations = [];
   final Set<String> _shownTrackIds = <String>{}; 
 
   final ValueNotifier<double> _dragXNotifier = ValueNotifier<double>(0.0);
-  late final AnimationController _animationController;
-  late AnimationController _starController;
 
   List<SwipeIconParticle> _swipeParticles = [];
   late AnimationController _particleController;
@@ -72,14 +49,18 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
   bool _isTutoActive = true;
 
   bool _tutoIconVisible = true;
-  late AnimationController _tutoAnimationController;
-  late Animation<Offset> _tutoSlideAnimation;
+
+  late AnimationController _masterController;
+  late AnimationController _swipeController;
+
+  late Animation<double> _nebulaAnimation;
+  late Animation<Offset> _tutoAnimation;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_stars.isEmpty) {
-      _stars = List.generate(1500, (i) { 
+      _stars = List.generate(300, (i) {
         final size = MediaQuery.of(context).size;
         const double margin = 100.0;
         
@@ -89,13 +70,14 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
         return Star(
           initialX, 
           initialY, 
-          math.Random().nextDouble() * 1.5, 
+          widget.mode == "dark" ? math.Random().nextDouble() * 1.0 : math.Random().nextDouble() * 1.0, 
           math.Random().nextDouble(),
           initialX,
           initialY,
         );
       });
     }
+    syncStarsWithLikes();
   }
 
   @override
@@ -110,36 +92,77 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
       _fetchHybridRecommendations(isInitial: true);
     }
   
-    _starController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200))
-    ..addListener(() {
-      setState(() {
-        final size = MediaQuery.of(context).size;
-        final double w = size.width;
-        
-        const double margin = 250.0;
-        final double worldWidth = w + 2 * margin;
+    _masterController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
 
-        for (var star in _stars) {
-          star.originX += star.velocityX;
+    _nebulaAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.6, end: 1.0), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.6), weight: 50),
+    ]).animate(
+      CurvedAnimation(parent: _masterController, curve: Curves.easeInOut, reverseCurve: Curves.easeInOut),
+    );
 
-          if (star.originX < -margin) {
-            star.originX += worldWidth;
-            star.x += worldWidth;
-          } else if (star.originX > w + margin) {
-            star.originX -= worldWidth;
-            star.x -= worldWidth;
-          }
+    _tutoAnimation = TweenSequence<Offset>([
+      TweenSequenceItem(tween: Tween(begin: Offset.zero, end: const Offset(-0.25, 0.0)).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: const Offset(-0.25, 0.0), end: const Offset(0.25, 0.0)).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: const Offset(0.25, 0.0), end: Offset.zero).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+    ]).animate(CurvedAnimation(parent: _masterController, curve: const Interval(0.0, 0.5)));
 
-          star.velocityX *= 0.4; 
+    _frameTimer.reset();
+    _frameTimer.start();
 
-          star.angle += 0.005;
-          star.originX += math.cos(star.angle) * 0.05;
-          star.originY += math.sin(star.angle) * 0.05;
+    _masterController.addListener(() {
+    final now = DateTime.now();
+    final touch = _touchPosition;
+
+    // Si performance basse, on ne traite qu'une étoile sur deux
+    int step = _performanceLevel == 0 ? 2 : 1;
+
+    for (int i = 0; i < _stars.length; i += step) {
+      var star = _stars[i];
+
+      // Gestion du "isNew"
+      if (star.isNew && star.birthTime != null) {
+        if (now.difference(star.birthTime!).inMilliseconds > 2000) {
+          star.isNew = false;
         }
-      });
-    })
-    ..repeat();
+      }
 
+      double targetX = star.originX;
+      double targetY = star.originY;
+
+      // Optimisation : Pas d'interaction tactile en mode "Low Performance"
+      if (touch != null && _performanceLevel > 0) {
+        double dx = star.x - touch.dx;
+        double dy = star.y - touch.dy;
+        double distSq = dx * dx + dy * dy; 
+        
+        if (distSq < 10000) { 
+          if (_performanceLevel == 2) {
+            // High : Calcul précis
+            double dist = math.sqrt(distSq);
+            double force = (100 - dist) * 0.5;
+            targetX += (dx / dist) * force;
+            targetY += (dy / dist) * force;
+          } else {
+            // Medium : Calcul approximatif (pas de sqrt)
+            targetX += dx * 0.05;
+            targetY += dy * 0.05;
+          }
+        }
+      }
+
+      star.x += (targetX - star.x) * 0.1;
+      star.y += (targetY - star.y) * 0.1;
+    }
+
+    _frameTimer.stop();
+    _adjustPerformance(_frameTimer.elapsedMilliseconds); 
+  });
+
+    _swipeController = AnimationController(vsync: this, duration: _CardConstants.animationDuration);
     _particleController = AnimationController(
       vsync: this, 
       duration: const Duration(milliseconds: 500)
@@ -157,35 +180,13 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
           });
         }
     });
-
-    _tutoAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 4500),
-    );
-
-    _tutoSlideAnimation = TweenSequence<Offset>([
-      TweenSequenceItem(tween: Tween(begin: Offset.zero, end: const Offset(-0.25, 0.0)).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: const Offset(-0.25, 0.0), end: const Offset(0.25, 0.0)).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: const Offset(0.25, 0.0), end: Offset.zero).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
-    ]).animate(CurvedAnimation(
-      parent: _tutoAnimationController,
-      curve: Interval(0.0, 0.5, curve: Curves.easeInOut),
-    ));
-
-    _tutoAnimationController.repeat();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: _CardConstants.animationDuration,
-    );
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-    _starController.dispose();
+    _masterController.dispose();
+    _swipeController.dispose();
     _dragXNotifier.dispose();
-    _tutoAnimationController.dispose();
     super.dispose();
   }
 
@@ -206,8 +207,24 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
     }
   }
 
+  // Dans MyHomeScreenState
+  int _performanceLevel = 2; // 2: High, 1: Medium, 0: Low
+  Stopwatch _frameTimer = Stopwatch();
+
+  void _adjustPerformance(int frameTimeMs) {
+    if (frameTimeMs > 25 && _performanceLevel > 0) {
+      // Si la frame dépasse 25ms, on baisse la qualité
+      setState(() => _performanceLevel--);
+    } else if (frameTimeMs < 10 && _performanceLevel < 2) {
+      // Si c'est très fluide, on peut remonter
+      setState(() => _performanceLevel++);
+    }
+  }
+
   void _onSwipe(bool liked) async {
-    if (_recommendations.isEmpty) return;
+    if (_recommendations.isEmpty || _currentTrackIndex >= _recommendations.length) {
+      return;
+    }
 
     _spawnSwipeParticles(liked);
 
@@ -218,6 +235,10 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
         setState(() => _tutoIconVisible = true);
       }
     });
+
+    if (liked) {
+      syncStarsWithLikes();
+    }
 
     if (_isTutoActive) {
       _tutoSwipeCount++;
@@ -244,6 +265,42 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
     }
   }
 
+  Future<void> syncStarsWithLikes() async {
+    if (_recommendations.isEmpty || _currentTrackIndex >= _recommendations.length) return;
+  
+    final likedTracks = await widget.dbService.getLikedTracks();
+
+    setState(() {
+      for (var star in _stars) {
+        star.color = Colors.white;
+      }
+
+      if (likedTracks.isEmpty) return;
+
+      Map<String, int> counts = {};
+      for (var t in likedTracks) {
+        counts[t.clusterStyle] = (counts[t.clusterStyle] ?? 0) + 1;
+      }
+
+      double fillFactor = (likedTracks.length * 0.02).clamp(0.0, 0.9);
+      int starsToColor = (_stars.length * fillFactor).toInt();
+
+      int coloredCount = 0;
+      counts.forEach((style, count) {
+        double ratio = count / likedTracks.length;
+        int amountForStyle = (starsToColor * ratio).toInt();
+        Color col = getGalaxyColor(style);
+
+        for (int i = 0; i < amountForStyle; i++) {
+          if (coloredCount < _stars.length) {
+            _stars[coloredCount].color = col;
+            coloredCount++;
+          }
+        }
+      });
+    });
+  }
+
   void _showTutoConclusion() {
     showDialog(
       context: context,
@@ -262,10 +319,10 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
   void _resetCard() {
     final double startX = _dragXNotifier.value;
     final Animation<double> resetAnim = Tween<double>(begin: startX, end: 0.0)
-        .animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack));
+        .animate(CurvedAnimation(parent: _swipeController, curve: Curves.easeOutBack));
 
     resetAnim.addListener(() => _dragXNotifier.value = resetAnim.value);
-    _animationController.forward(from: 0.0);
+    _swipeController.forward(from: 0.0);
   }
 
   void _animateAndCompleteSwipe(bool liked) {
@@ -273,10 +330,31 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
     final double targetX = liked ? 1000.0 : -1000.0;
 
     final Animation<double> swipeAnim = Tween<double>(begin: startX, end: targetX)
-        .animate(CurvedAnimation(parent: _animationController, curve: Curves.easeIn));
+        .animate(CurvedAnimation(parent: _swipeController, curve: Curves.easeIn));
 
     swipeAnim.addListener(() => _dragXNotifier.value = swipeAnim.value);
-    _animationController.forward(from: 0.0).then((_) => _onSwipe(liked));
+    _swipeController.forward(from: 0.0).then((_) => _onSwipe(liked));
+  }
+
+  Color getGalaxyColor(String genre) {
+    switch (genre) {
+      case 'Musique Calme & Instrumentale': return widget.mode == "light" ? const Color.fromARGB(255, 24, 106, 173).withOpacity(0.8) : const Color.fromARGB(255, 19, 81, 132).withOpacity(0.8);
+      case 'Hip-Hop / Électro Rythmé': return widget.mode == "light" ? const Color.fromARGB(255, 170, 102, 0).withOpacity(0.8) : Colors.orange.withOpacity(0.8);
+      case 'Danse / Électronique Mélancolique': return widget.mode == "light" ? const Color.fromARGB(255, 95, 24, 107).withOpacity(0.8) : Colors.purple.withOpacity(0.8);
+      case 'Rock / Pop Standar': return widget.mode == "light" ? const Color.fromARGB(255, 134, 37, 30).withOpacity(0.8) : Colors.red.withOpacity(0.8);
+      case 'Musique Triste / Indépendante': return widget.mode == "light" ? const Color.fromARGB(255, 59, 76, 84).withOpacity(0.8) : Colors.blueGrey.withOpacity(0.8);
+      case 'Pop Radio / Joyeuse & Dansante': return widget.mode == "light" ? const Color.fromARGB(255, 138, 128, 32).withOpacity(0.8) : Colors.yellow.withOpacity(0.8);
+      default: return Colors.transparent;
+    }
+  }
+
+  Color getGalaxyStarColor(String genre, String mode) {
+    Color base = getGalaxyColor(genre); 
+    
+    if (mode == "light") {
+      return base.withOpacity(1.0); 
+    }
+    return base;
   }
 
   void _onButtonSwipe(bool liked) => _animateAndCompleteSwipe(liked);
@@ -286,7 +364,7 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
     final random = math.Random();
     
     setState(() {
-      for (int i = 0; i < 20; i++) {
+      for (int i = 0; i < 8; i++) {
         double startX = liked ? size.width : 0; 
         double startY = random.nextDouble() * size.height * 0.6 + size.height * 0.2;
         
@@ -309,8 +387,8 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
   Widget _buildTutoOverlay() {
     if (!_isTutoActive) return const SizedBox.shrink();
 
-    return IgnorePointer(
-      child: Positioned.fill(
+    return Positioned.fill(
+      child: IgnorePointer(
         child: AnimatedOpacity(
           duration: const Duration(milliseconds: 150),
           opacity: _tutoIconVisible ? 1.0 : 0.0,
@@ -318,9 +396,9 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Center(
-                child: SlideTransition(
-                  position: _tutoSlideAnimation,
-                  child: const Icon(Icons.touch_app, size: 50, color: Colors.white),
+                child: Transform.translate(
+                  offset: _tutoAnimation.value * 50,
+                  child: Icon(Icons.touch_app, size: 50, color: widget.mode == "light" ? Colors.black : Colors.white24),
                 ),
               ),
               const SizedBox(height: 80),
@@ -336,70 +414,120 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
       mode: widget.mode,
       width: _CardConstants.width,
       height: _CardConstants.height,
-      padding: 20,
+      padding: 0,
       borderRadius: BorderRadius.circular(_CardConstants.borderRadius),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(track.trackName, style: _TextStyles.titleStyle, maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 5),
-          Text(track.trackArtist, style: _TextStyles.artistStyle),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 40, 
+            right: 40,
+            child: FrequencyScanner(color: widget.mode == "light" ? Colors.black12 : Colors.white24), 
+          ),
+          Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(track.trackName, style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: widget.mode == "light" ? Colors.black : Colors.white,
+                ), maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 5),
+                Text(track.trackArtist, style: TextStyle(
+                  fontSize: 18,
+                  color: widget.mode == "light" ? Colors.black : Colors.white,
+                  fontWeight: FontWeight.w300,
+                )),
+              ],
+            ),
+          ) 
         ],
-      ),
+      ) 
+    );
+  }
+  
+  Widget _buildNebulaBackground(String genre) {
+    return AnimatedBuilder(
+      animation: _nebulaAnimation,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.center,
+              radius: 1.2 * _nebulaAnimation.value, 
+              colors: [
+                getGalaxyColor(genre).withOpacity(0.2 * _nebulaAnimation.value),
+                widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241).withOpacity(0.0) : Colors.black.withOpacity(0.0),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCentralContent(bool isOutOfBounds) {
+    if (_isLoading || isOutOfBounds) return Center(child: CircularProgressIndicator(color: widget.mode == "light" ? Colors.black : Colors.white));
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildCardStackNotifier(_recommendations[_currentTrackIndex], 
+            (_currentTrackIndex + 1 < _recommendations.length) ? _recommendations[_currentTrackIndex + 1] : null),
+        const SizedBox(height: 15),
+        _buildActionButtons(),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget centralContent;
+    bool isOutOfBounds = _currentTrackIndex >= _recommendations.length;
 
-    if (_isLoading || _currentTrackIndex >= _recommendations.length) {
-      centralContent = Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(
-            widget.mode == "light" ? Colors.black : Colors.white,
-          ),
-        ),
-      );
-    } else {
-      final currentTrack = _recommendations[_currentTrackIndex];
-      final nextTrack = (_currentTrackIndex + 1 < _recommendations.length) 
-          ? _recommendations[_currentTrackIndex + 1] 
-          : null;
-
-      centralContent = Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildCardStackNotifier(currentTrack, nextTrack),
-          const SizedBox(height: 15),
-          _buildActionButtons(),
-        ],
-      );
-    }
+    String currentGenre = (!isOutOfBounds) 
+        ? _recommendations[_currentTrackIndex].clusterStyle 
+        : "default";
 
     return Scaffold(
       backgroundColor: widget.mode == "light" 
           ? const Color.fromARGB(255, 248, 247, 241) 
           : Colors.black,
-      body: Listener(
+      body: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onPointerMove: (e) => setState(() => _touchPosition = e.localPosition),
-        onPointerUp: (e) => setState(() => _touchPosition = null),
-        onPointerCancel: (e) => setState(() => _touchPosition = null),
+        onPanStart: (_) => _masterController.stop(),
+        onPanEnd: (_) => _masterController.repeat(),
         child: Stack(
           children: [
-            Positioned.fill(
-              child: CustomPaint(
-                painter: StarFieldPainter(_touchPosition, _stars, widget.mode),
-              ),
+            AnimatedBuilder(
+              animation: _masterController,
+              builder: (context, _) {
+                return Stack(
+                  children: [
+                    // Nébuleuse
+                    RepaintBoundary(
+                      child: Opacity(
+                        opacity: _nebulaAnimation.value,
+                        child: _buildNebulaBackground(currentGenre),
+                      ),
+                    ),
+                    // Étoiles
+                    RepaintBoundary(
+                      child: CustomPaint(
+                        painter: StarFieldPainter(_stars, widget.mode),
+                      ),
+                    ),
+                  ],
+                );
+              }
             ),
             _buildOverlayGradient(),
             SafeArea(
-              child: centralContent,
+              child: RepaintBoundary( 
+                child: _buildCentralContent(isOutOfBounds),
+              ),
             ),
-
-            ..._swipeParticles.map((p) => Positioned(
+              ..._swipeParticles.map((p) => Positioned(
               left: p.x,
               top: p.y,
               child: Opacity(
@@ -413,13 +541,13 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
                     width: p.size,
                     height: p.size,
                     color: !p.isLike
-                      ? Colors.red
-                      : Colors.amberAccent,
+                      ? (widget.mode == "dark" ? Colors.white : Colors.red)
+                      : (widget.mode == "dark" ? Colors.white : Colors.deepPurple),
                   ),
                 ),
               ),
             )).toList(),
-            _buildTutoOverlay()
+            _buildTutoOverlay(),
           ],
         ),
       ),
@@ -439,37 +567,31 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
           children: <Widget>[
             if (next != null)
               Opacity(
-                opacity: 0.3 + (dragFactor * 0.7), 
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: (1 - dragFactor) * 10, 
-                    sigmaY: (1 - dragFactor) * 10,
-                  ),
-                  child: Transform.scale(
-                    scale: _CardConstants.nextCardScale + (dragFactor * (1.0 - _CardConstants.nextCardScale)),
-                    child: _buildTrackCard(next),
-                  ),
+                opacity: (dragFactor * 1.0).clamp(0.0, 1.0), 
+                child: Transform.scale(
+                  scale: _CardConstants.nextCardScale + (dragFactor * (1.0 - _CardConstants.nextCardScale)),
+                  child: _buildTrackCard(next),
                 ),
               ),
               
-            GestureDetector(
-              onPanStart: (_) => _animationController.stop(),
-              onPanUpdate: (d) => _dragXNotifier.value += d.delta.dx,
-              onPanEnd: (_) {
-                if (_dragXNotifier.value.abs() > _CardConstants.swipeThreshold) {
-                  _animateAndCompleteSwipe(_dragXNotifier.value > 0);
-                } else {
-                  _resetCard();
-                }
-              },
-              child: Transform.translate(
-                offset: Offset(dragX, 0),
-                child: Transform.rotate(
-                  angle: angle,
-                  child: _buildTrackCard(current),
+              GestureDetector(
+                onPanStart: (_) => _swipeController.stop(),
+                onPanUpdate: (d) => _dragXNotifier.value += d.delta.dx,
+                onPanEnd: (_) {
+                  if (_dragXNotifier.value.abs() > _CardConstants.swipeThreshold) {
+                    _animateAndCompleteSwipe(_dragXNotifier.value > 0);
+                  } else {
+                    _resetCard();
+                  }
+                },
+                child: Transform.translate(
+                  offset: Offset(dragX, 0),
+                  child: Transform.rotate(
+                    angle: angle,
+                    child: _buildTrackCard(current),
+                  ),
                 ),
               ),
-            ),
           ],
         );
       },
@@ -485,9 +607,9 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
             end: Alignment.bottomCenter,
             colors: [
               widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
-              widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.3),
-              widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0.3) : Colors.black.withValues(alpha: 0.3),
-              widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+              widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241).withOpacity(0.0) : Colors.black.withOpacity(0.0),
+              widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241).withOpacity(0.0) : Colors.black.withOpacity(0.0),
+              widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
             ],
             stops: const [0.0, 0.15, 0.85, 1.0],
           ),
@@ -529,8 +651,8 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
                 : 'assets/images/cross-icon-fill-white.png', 
               width: 42,
               color: !_isDisliked
-                ? widget.mode == "light" ? Colors.black : Colors.white
-                : Colors.red,),
+                ? (widget.mode == "light" ? Colors.black : Colors.white)
+                : ( widget.mode == "light" ? Colors.red : Colors.white)),
           ),
         ),
         const SizedBox(width: 150),
@@ -557,14 +679,74 @@ class _MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMix
             child: Image.asset(
               !_isFavorite 
                 ? 'assets/images/liked-icon-white.png' 
-                : 'assets/images/liked-icon-fill-white.png', 
+                : 'assets/images/liked-icon-fill-white.png',
               width: 60,
               color: !_isFavorite
-                ? widget.mode == "light" ? Colors.black : Colors.white
-                : Colors.amberAccent,),
+                ? (widget.mode == "light" ? Colors.black : Colors.white)
+                : (widget.mode == "light" ? Colors.deepPurple : Colors.white)),
           ),
         ),
       ],
     );
   }
+}
+
+class FrequencyScanner extends StatefulWidget {
+  final Color color;
+  const FrequencyScanner({super.key, required this.color});
+
+  @override
+  State<FrequencyScanner> createState() => _FrequencyScannerState();
+}
+
+class _FrequencyScannerState extends State<FrequencyScanner> with TickerProviderStateMixin {
+  late List<AnimationController> _controllers;
+  late List<Animation<double>> _animations;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = List.generate(5, (i) => AnimationController(
+      duration: Duration(milliseconds: 400 + (i * 100)),
+      vsync: this,
+    )..repeat(reverse: true));
+
+    _animations = _controllers.map((c) => Tween<double>(begin: 2.0, end: 15.0).animate(
+      CurvedAnimation(parent: c, curve: Curves.easeInOut),
+    )).toList();
+  }
+
+  @override
+  void dispose() {
+    for (var c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (i) => AnimatedBuilder(
+        animation: _animations[i],
+        builder: (context, child) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 1),
+          width: 3,
+          height: _animations[i].value,
+          decoration: BoxDecoration(
+            color: widget.color.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      )),
+    );
+  }
+}
+
+class StarAnimation {
+  Offset position;
+  double progress = 0.0;
+  Color color;
+  StarAnimation(this.position, this.color);
 }

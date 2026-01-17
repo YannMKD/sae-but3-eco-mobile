@@ -21,12 +21,13 @@ class AppLayout extends StatefulWidget {
 class _AppLayoutState extends State<AppLayout> {
   int _selectedIndex = 0;
   final GlobalKey<PlaylistScreenState> playlistKey = GlobalKey<PlaylistScreenState>();
+  final GlobalKey<MyHomeScreenState> homeKey = GlobalKey<MyHomeScreenState>();
 
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
-      MyHomeScreen(dbService: widget.dbService, mode: widget.mode, initialTracks: widget.initialTracks,),
-      PlaylistScreen(key: playlistKey, dbService: widget.dbService, mode: widget.mode),
+      MyHomeScreen(key: homeKey, dbService: widget.dbService, mode: widget.mode, initialTracks: widget.initialTracks,),
+      PlaylistScreen(key: playlistKey, dbService: widget.dbService, mode: widget.mode, onNotifyUpdate: () => homeKey.currentState?.syncStarsWithLikes()),
     ];
 
     return Scaffold(
@@ -132,9 +133,8 @@ class _AppLayoutState extends State<AppLayout> {
                     ),
                     child: Center(
                       child: Image.asset(
-                        widget.mode == "light" ? 
-                          'assets/images/playlist-liked-icon-black.png' :
-                          'assets/images/playlist-liked-icon-white.png', 
+                        'assets/images/playlist-liked-icon-white.png', 
+                        color: widget.mode == "light" ? Colors.black : Colors.white,
                         width: 24),
                     ),
                   ),
