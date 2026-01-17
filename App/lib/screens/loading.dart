@@ -31,14 +31,19 @@ class _LoadingState extends State<Loading> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final double wRatio = MediaQuery.of(context).size.width / 392.7;
+    
+    final double responsiveSize = widget.size * wRatio;
+
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
         return CustomPaint(
-          size: Size(widget.size, widget.size),
+          size: Size(responsiveSize, responsiveSize),
           painter: _OrbitPainter(
             progress: _controller.value,
             color: widget.color,
+            wRatio: wRatio, 
           ),
         );
       },
@@ -49,8 +54,9 @@ class _LoadingState extends State<Loading> with SingleTickerProviderStateMixin {
 class _OrbitPainter extends CustomPainter {
   final double progress;
   final Color color;
+  final double wRatio; 
 
-  _OrbitPainter({required this.progress, required this.color});
+  _OrbitPainter({required this.progress, required this.color, required this.wRatio});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -60,13 +66,13 @@ class _OrbitPainter extends CustomPainter {
     final orbitPaint = Paint()
       ..color = color.withOpacity(0.1)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+      ..strokeWidth = 2 * wRatio; 
     canvas.drawCircle(center, radius, orbitPaint);
 
     final signalPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 3
+      ..strokeWidth = 3 * wRatio
       ..shader = SweepGradient(
         colors: [Colors.transparent, color],
         stops: const [0.7, 1.0],
@@ -87,7 +93,7 @@ class _OrbitPainter extends CustomPainter {
       center.dx + radius * math.cos(headAngle),
       center.dy + radius * math.sin(headAngle),
     );
-    canvas.drawCircle(headOffset, 4, headPaint);
+    canvas.drawCircle(headOffset, 4 * wRatio, headPaint);
   }
 
   @override

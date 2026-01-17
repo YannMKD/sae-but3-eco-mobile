@@ -59,9 +59,21 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
   late Animation<double> _nebulaAnimation;
   late Animation<Offset> _tutoAnimation;
 
+  late double cardWidth;
+  late double cardHeight;
+  late double swipeThreshold;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final size = MediaQuery.of(context).size;
+    final double wRatio = size.width / 392.7;
+    final double hRatio = size.height / 850.7;
+
+    cardWidth = 350 * wRatio;
+    cardHeight = 450 * hRatio;
+    swipeThreshold = 100.0 * wRatio;
+    
     if (_stars.isEmpty) {
       _stars = List.generate(300, (i) {
         final size = MediaQuery.of(context).size;
@@ -421,33 +433,36 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
   }
 
   Widget _buildTrackCard(Track track) {
+    final size = MediaQuery.of(context).size;
+    final double wRatio = size.width / 392.7;
+
     return GlassBox(
       mode: widget.mode,
-      width: _CardConstants.width,
-      height: _CardConstants.height,
+      width: cardWidth, 
+      height: cardHeight, 
       padding: 0,
-      borderRadius: BorderRadius.circular(_CardConstants.borderRadius),
+      borderRadius: BorderRadius.circular(9 * wRatio),
       child: Stack(
         children: [
           Positioned(
-            top: 40, 
-            right: 40,
-            child: FrequencyScanner(color: widget.mode == "light" ? Colors.black12 : Colors.white24), 
+            top: 40 * wRatio, 
+            right: 40 * wRatio,
+            child: FrequencyScanner(color: widget.mode == "light" ? Colors.black12 : Colors.white24, wRatio: wRatio), 
           ),
           Padding(
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(20 * wRatio),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(track.trackName, style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 32 * wRatio,
                   fontWeight: FontWeight.bold,
                   color: widget.mode == "light" ? Colors.black : Colors.white,
                 ), maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 5),
+                SizedBox(height: 5 * wRatio),
                 Text(track.trackArtist, style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 18 * wRatio,
                   color: widget.mode == "light" ? Colors.black : Colors.white,
                   fontWeight: FontWeight.w300,
                 )),
@@ -629,78 +644,57 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
   bool _isDisliked = false;
 
   Widget _buildActionButtons() {
+    final size = MediaQuery.of(context).size;
+    final double wRatio = size.width / 392.7;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        GlassBox(
-          mode: widget.mode, 
-          borderRadius: BorderRadius.circular(20), 
-          padding: 5,
-          child: FloatingActionButton(
-            heroTag: "dislikeBtn",
-            onPressed: () {
-              _isDisliked = true;
-              Timer(const Duration(milliseconds: 400), () {
-                _isDisliked = false;
-              });
-
-              _onButtonSwipe(false);
-            },
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            focusElevation: 0,
-            hoverElevation: 0,
-            highlightElevation: 0,
-            disabledElevation: 0,
-            child: Image.asset(
-              !_isDisliked 
-                ? 'assets/images/cross-icon-white.png' 
-                : 'assets/images/cross-icon-fill-white.png', 
-              width: 42,
-              color: !_isDisliked
-                ? (widget.mode == "light" ? Colors.black : Colors.white)
-                : ( widget.mode == "light" ? Colors.red : Colors.white)),
-          ),
+        _buildCircularButton(
+          icon: !_isDisliked ? 'assets/images/cross-icon-white.png' : 'assets/images/cross-icon-fill-white.png',
+          isDisliked: true,
+          wRatio: wRatio,
         ),
-        const SizedBox(width: 150),
-        GlassBox(
-          mode: widget.mode, 
-          borderRadius: BorderRadius.circular(20), 
-          padding: 5,
-          child: FloatingActionButton(
-            heroTag: "likeBtn",
-            onPressed: () {
-              _isFavorite = true;
-              Timer(const Duration(milliseconds: 400), () {
-                _isFavorite = false;
-              });
-
-              _onButtonSwipe(true);
-            },
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            focusElevation: 0,
-            hoverElevation: 0,
-            highlightElevation: 0,
-            disabledElevation: 0,
-            child: Image.asset(
-              !_isFavorite 
-                ? 'assets/images/liked-icon-white.png' 
-                : 'assets/images/liked-icon-fill-white.png',
-              width: 60,
-              color: !_isFavorite
-                ? (widget.mode == "light" ? Colors.black : Colors.white)
-                : (widget.mode == "light" ? Colors.deepPurple : Colors.white)),
-          ),
+        SizedBox(width: 150 * wRatio),
+        _buildCircularButton(
+          icon: !_isFavorite ? 'assets/images/liked-icon-white.png' : 'assets/images/liked-icon-fill-white.png',
+          isDisliked: false,
+          wRatio: wRatio,
         ),
       ],
+    );
+  }
+
+  Widget _buildCircularButton({required String icon, required bool isDisliked, required double wRatio}) {
+    return GlassBox(
+      mode: widget.mode, 
+      borderRadius: BorderRadius.circular(20 * wRatio), 
+      padding: 5 * wRatio,
+      child: SizedBox(
+        width: 56 * wRatio, 
+        height: 56 * wRatio,
+        child: FloatingActionButton(
+          heroTag: isDisliked ? "dislikeBtn" : "likeBtn",
+          onPressed: () => isDisliked ? _onButtonSwipe(false) : _onButtonSwipe(true),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Image.asset(
+            icon,
+            width: (isDisliked ? 42 : 60) * wRatio,
+            color: isDisliked 
+              ? (widget.mode == "light" ? (_isDisliked ? Colors.red : Colors.black) : Colors.white)
+              : (widget.mode == "light" ? (_isFavorite ? Colors.deepPurple : Colors.black) : Colors.white),
+          ),
+        ),
+      ),
     );
   }
 }
 
 class FrequencyScanner extends StatefulWidget {
   final Color color;
-  const FrequencyScanner({super.key, required this.color});
+  final double wRatio; 
+  const FrequencyScanner({super.key, required this.color, required this.wRatio});
 
   @override
   State<FrequencyScanner> createState() => _FrequencyScannerState();
@@ -738,18 +732,19 @@ class _FrequencyScannerState extends State<FrequencyScanner> with TickerProvider
       children: List.generate(5, (i) => AnimatedBuilder(
         animation: _animations[i],
         builder: (context, child) => Container(
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          width: 3,
-          height: _animations[i].value,
+          margin: EdgeInsets.symmetric(horizontal: 1 * widget.wRatio),
+          width: 3 * widget.wRatio, 
+          height: _animations[i].value * widget.wRatio,
           decoration: BoxDecoration(
             color: widget.color.withOpacity(0.8),
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(2 * widget.wRatio),
           ),
         ),
       )),
     );
   }
 }
+
 
 class StarAnimation {
   Offset position;

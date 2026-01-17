@@ -61,35 +61,57 @@ class PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   void _confirmAndResetLikedTracks(BuildContext context) {
+    final double wRatio = MediaQuery.of(context).size.width / 392.7;
+
     showDialog(
       context: context, 
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white, fontSize: 18),"Tu confirmes ?"),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-          backgroundColor: widget.mode == "light" ? const Color.fromARGB(249, 248, 247, 248) : const Color.fromARGB(249, 12, 12, 12),
-          content: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black45 : const Color.fromARGB(107, 255, 255, 255)), "Tu supprimeras toutes les sources de ta bibliothèque ? Cette action est iréversible"),
+          title: Text(
+            "Tu confirmes ?",
+            style: TextStyle(
+              color: widget.mode == "light" ? Colors.black : Colors.white, 
+              fontSize: 18 * wRatio 
+            ),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30 * wRatio) 
+          ),
+          backgroundColor: widget.mode == "light" 
+              ? const Color.fromARGB(249, 248, 247, 248) 
+              : const Color.fromARGB(249, 12, 12, 12),
+          content: Text(
+            "Tu supprimeras toutes les sources de ta bibliothèque ? Cette action est irréversible",
+            style: TextStyle(
+              color: widget.mode == "light" ? Colors.black45 : Colors.white54,
+              fontSize: 14 * wRatio 
+            ),
+          ),
           actions: <Widget>[
             TextButton(
-              style: ButtonStyle(
-                padding:MaterialStateProperty.all<EdgeInsets>(const EdgeInsets.symmetric(horizontal: 20, vertical: 0)),
-                side: MaterialStateProperty.all<BorderSide>(BorderSide(color: widget.mode == "light" ? Colors.black38 : const Color.fromARGB(106, 255, 255, 255))),
-                foregroundColor: MaterialStateProperty.all<Color>(widget.mode == "light" ? Colors.black : Colors.white),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 20 * wRatio, vertical: 10 * wRatio),
+                side: BorderSide(color: widget.mode == "light" ? Colors.black38 : Colors.white24),
               ),
               onPressed: () => Navigator.of(context).pop(), 
-              child: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Annuler")
+              child: Text(
+                "Annuler",
+                style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white),
+              )
             ), 
             TextButton(
-              style: ButtonStyle(
-                padding:MaterialStateProperty.all<EdgeInsets>(const EdgeInsets.symmetric(horizontal: 20, vertical: 0)),
-                backgroundColor: MaterialStateProperty.all<Color>(widget.mode == "light" ? Colors.black : const Color.fromARGB(249, 248, 247, 248)),
-                foregroundColor: MaterialStateProperty.all<Color>(widget.mode == "light" ? Colors.white : Colors.black),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 20 * wRatio, vertical: 10 * wRatio),
+                backgroundColor: widget.mode == "light" ? Colors.black : Colors.white,
               ),
               onPressed: () {
                 Navigator.of(context).pop();
                 _onRemoveAll();
               },
-              child: Text("Supprimer tout"),
+              child: Text(
+                "Supprimer tout",
+                style: TextStyle(color: widget.mode == "light" ? Colors.white : Colors.black),
+              ),
             )
           ],
         );
@@ -99,11 +121,13 @@ class PlaylistScreenState extends State<PlaylistScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final double wRatio = MediaQuery.of(context).size.width / 392.7;
+
     return Scaffold(
-      backgroundColor: widget.mode == "light" ? Color.fromARGB(255, 248, 247, 241) : Colors.black,
+      backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
       body: Stack(
         children: [
-          SafeArea(child: _buildBody(),),
+          SafeArea(child: _buildBody(wRatio)),
           _buildOverlayGradientBottom(),
         ]
       ),
@@ -124,7 +148,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
                 widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
                 widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241) : Colors.black,
               ],
-              stops: const [0.0, 0.3, 0.95, 1.0],
+              stops: const [0.0, 0.3, 0.97, 1.0],
             ),
           ),
         ),
@@ -146,7 +170,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
                 widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
                 widget.mode == "light" ?const Color.fromARGB(255, 248, 247, 241).withValues(alpha: 0) : Colors.black.withValues(alpha: 0),
               ],
-              stops: const [0.0, 0.05, 0.85, 1.0],
+              stops: const [0.0, 0.03, 0.85, 1.0],
             ),
           ),
         ),
@@ -154,51 +178,35 @@ class PlaylistScreenState extends State<PlaylistScreen> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(double wRatio) {
     if (_isLoading) {
-      return Center(child: Loading(color: widget.mode == "light" ? Colors.black : Colors.white, size: 60));
+      return Center(child: Loading(color: widget.mode == "light" ? Colors.black : Colors.white, size: 60 * wRatio));
     }
 
     if (_likedTracks.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.music_off_rounded, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              "Pas encore de sources ajoutées",
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Retournez dans la galaxie pour ajouter des sources !",
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
-        ),
-      );
+      return _buildEmptyState(wRatio);
     }
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: EdgeInsets.symmetric(horizontal: 16.0 * wRatio, vertical: 10 * wRatio),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
             children: [
               Text(
                 'Nombre de titres : ${_likedTracks.length}',
-                style: TextStyle(fontWeight: FontWeight.bold,  color: widget.mode == "light" ? Colors.black : Colors.white),
-                textAlign: TextAlign.left,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,  
+                  fontSize: 14 * wRatio,
+                  color: widget.mode == "light" ? Colors.black : Colors.white
+                ),
               ),
               TextButton.icon(
                 onPressed: () => _confirmAndResetLikedTracks(context),
-                icon: const Icon(Icons.delete_sweep, color: Colors.red),
-                label: const Text(
+                icon: Icon(Icons.delete_sweep, color: Colors.red, size: 20 * wRatio),
+                label: Text(
                   'Supprimer Toute la Liste',
-                  style: TextStyle(color: Colors.red),
-                  textAlign: TextAlign.left,
+                  style: TextStyle(color: Colors.red, fontSize: 13 * wRatio),
                 ),
               ),
             ],
@@ -209,62 +217,99 @@ class PlaylistScreenState extends State<PlaylistScreen> {
           child: Stack(
             children: [
               ListView.separated(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.fromLTRB(16 * wRatio, 16 * wRatio, 16 * wRatio, 16 * wRatio), 
                 itemCount: _likedTracks.length,
-                separatorBuilder: (context, index) => const Divider(thickness: 0),
+                separatorBuilder: (context, index) => SizedBox(height: 10 * wRatio),
                 itemBuilder: (context, index) {
                   final track = _likedTracks[index];
-
-                  return GlassBox(
-                    width: MediaQuery.of(context).size.width,
-                    borderRadius: BorderRadius.circular(10),
-                    padding: 1,
-                    mode: widget.mode,
-                    child: IntrinsicHeight(
-                      child: ListTile(
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                        leading: Container(
-                          height: 68,
-                          width: 68,
-                          decoration: BoxDecoration(
-                            color: widget.mode == "light" ? Colors.grey[300] : Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.music_note, size: 40, color: Colors.grey),
-                        ),
-                        title: Text(
-                          track.trackName,
-                          style: TextStyle(fontWeight: FontWeight.bold, color: widget.mode == "light" ? Colors.black : Colors.white),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          track.trackArtist,
-                          style: TextStyle(color: widget.mode == "light" ? Colors.grey[700] : Colors.white),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: widget.mode == "light" ? 
-                                const Icon(Icons.delete_outline_outlined, color:  Colors.black):
-                                const Icon(Icons.delete_outline_outlined, color:  Colors.white),
-                              onPressed: () => _onRemove(track.trackId),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ) 
-                  );
-                }
+                  return _buildTrackItem(track, wRatio);
+                },
               ),
               _buildOverlayGradientTop(),
             ]
           ),
         )
       ]
+    );
+  }
+
+  Widget _buildTrackItem(Track track, double wRatio) {
+    return GlassBox(
+      width: double.infinity,
+      borderRadius: BorderRadius.circular(10 * wRatio),
+      padding: 1,
+      mode: widget.mode,
+      child: ListTile(
+        contentPadding: EdgeInsets.symmetric(horizontal: 12 * wRatio, vertical: 4 * wRatio),
+        leading: Container(
+          height: 60 * wRatio, 
+          width: 60 * wRatio,
+          decoration: BoxDecoration(
+            color: widget.mode == "light" ? Colors.grey[300] : Colors.white10,
+            borderRadius: BorderRadius.circular(8 * wRatio),
+          ),
+          child: Icon(Icons.music_note, size: 30 * wRatio, color: Colors.grey),
+        ),
+        title: Text(
+          track.trackName,
+          style: TextStyle(
+            fontWeight: FontWeight.bold, 
+            fontSize: 16 * wRatio,
+            color: widget.mode == "light" ? Colors.black : Colors.white
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          track.trackArtist,
+          style: TextStyle(
+            fontSize: 14 * wRatio,
+            color: widget.mode == "light" ? Colors.grey[700] : Colors.white70
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: IconButton(
+          icon: Icon(
+            Icons.delete_outline_outlined, 
+            size: 24 * wRatio,
+            color: widget.mode == "light" ? Colors.black : Colors.white
+          ),
+          onPressed: () => _onRemove(track.trackId),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(double wRatio) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.music_off_rounded, 
+            size: 64 * wRatio,
+            color: Colors.grey[400]
+          ),
+          SizedBox(height: 16 * wRatio),
+          Text(
+            "Pas encore de sources ajoutées",
+            style: TextStyle(
+              fontSize: 18 * wRatio,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500
+            ),
+          ),
+          SizedBox(height: 8 * wRatio),
+          Text(
+            "Retournez dans la galaxie pour ajouter des sources !",
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 14 * wRatio 
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

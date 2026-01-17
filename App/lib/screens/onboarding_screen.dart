@@ -94,6 +94,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+
+    final double hRatio = size.height / 850.7;
+    final double wRatio = size.width / 392.7;
+
     final starSize = size.width * 1.8;
 
     return Scaffold(
@@ -118,8 +122,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                           BoxShadow(
                             color: (widget.mode == "light" ? Colors.black : Colors.white)
                                 .withOpacity(_glowAnimation.value),
-                            blurRadius: 60 * _heartbeatAnimation.value,
-                            spreadRadius: 20 * _heartbeatAnimation.value,
+                            blurRadius: 60 * _heartbeatAnimation.value * wRatio,
+                            spreadRadius: 20 * _heartbeatAnimation.value * wRatio,
                           ),
                         ],
                       ),
@@ -128,7 +132,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       opacity: widget.mode == "light" ? 0.3 : 0.6, 
                       child: Transform.scale(
                         scale: _heartbeatAnimation.value,
-                        alignment: Alignment.center,
                         child: Image.asset(
                           "assets/images/star.png",
                           width: starSize,
@@ -147,16 +150,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             controller: _pageController,
             children: [
               _buildPage(
+                context,
+                hRatio, wRatio,
                 title: "ACCÈS TRACKSTAR", 
                 text: "Exploration de flux musicaux en temps réel. Accédez à de nouvelles sources sonores chaque jour.",
                 icon: Icons.radar,
               ),
               _buildPage(
+                context,
+                hRatio, wRatio,
                 title: "NAVIGATION TACTILE", 
                 text: "Swipe droit pour ajouter le titre dans ta bibliothèque. Swipe gauche pour ignorer et passer à la source suivante.",
                 icon: Icons.swipe,
               ),
               _buildPage(
+                context,
+                hRatio, wRatio,
                 title: "CALIBRAGE PROFIL", 
                 text: "Analyse de 5 sources requise pour stabiliser l'algorithme et définir votre trajectoire musicale.",
                 icon: Icons.tune,
@@ -192,7 +201,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildPage({
+  Widget _buildPage(
+    BuildContext context,
+    double hRatio, double wRatio, {
     required String title,
     required String text,
     required IconData icon,
@@ -202,44 +213,54 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     return Stack(
       children: [
         Padding(
-          padding: const EdgeInsets.all(40.0),
+          padding: EdgeInsets.symmetric(horizontal: MediaQuery.of(context).size.width * 0.1),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (isLast) ...[
-                const SizedBox(height: 112),
-              ],
-              Icon(icon, size: 100, color: widget.mode == "light" ? Colors.black : Colors.white),
-              const SizedBox(height: 40),
+              if (isLast) Spacer(flex: 3),
+              
+              Icon(
+                icon, 
+                size: 100 * wRatio, 
+                color: widget.mode == "light" ? Colors.black : Colors.white
+              ),
+              
+              SizedBox(height: 40 * hRatio),
+              
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 28 * wRatio,
                   fontWeight: FontWeight.bold,
                   color: widget.mode == "light" ? Colors.black : Colors.white,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 20),
+              
+              SizedBox(height: 20 * hRatio),
+              
               Text(
                 text,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 16 * wRatio,
                   color: widget.mode == "light" ? Colors.black54 : Colors.white70,
                 ),
                 textAlign: TextAlign.center,
               ),
+              
               if (isLast) ...[
-                const SizedBox(height: 60),
+                SizedBox(height: 40 * hRatio),
                 ElevatedButton(
                   onPressed: onDone,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: widget.mode == "light" ? Colors.black : Colors.white,
                     foregroundColor: widget.mode == "light" ? Colors.white : Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    padding: EdgeInsets.symmetric(horizontal: 40 * wRatio, vertical: 15 * hRatio),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   ),
-                  child: const Text("Commencer le test"),
+                  child: Text("Commencer le test", style: TextStyle(fontSize: 16 * wRatio)),
                 ),
+                Spacer(flex: 2),
               ]
             ],
           ),
@@ -248,9 +269,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
           Positioned(
             top: 0,
             bottom: 0,
-            right: 20,
+            right: 20 * wRatio,
             child: Center(
-              child: _ScrollingArrow(mode: widget.mode)
+              child: _ScrollingArrow(mode: widget.mode, wRatio: wRatio)
             ),
           ),
       ],
@@ -260,7 +281,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
 class _ScrollingArrow extends StatefulWidget {
   final String mode;
-  const _ScrollingArrow({required this.mode});
+  final double wRatio;
+  const _ScrollingArrow({required this.mode, required this.wRatio});
 
   @override
   State<_ScrollingArrow> createState() => _ScrollingArrowState();
@@ -279,8 +301,16 @@ class _ScrollingArrowState extends State<_ScrollingArrow> with SingleTickerProvi
     )..repeat();
 
     _animation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 15.0).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 15.0, end: 0.0).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.0, end: 15.0 * widget.wRatio)
+            .chain(CurveTween(curve: Curves.easeOut)), 
+        weight: 50
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 15.0 * widget.wRatio, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeIn)), 
+        weight: 50
+      ),
     ]).animate(_controller);
   }
 
@@ -292,6 +322,11 @@ class _ScrollingArrowState extends State<_ScrollingArrow> with SingleTickerProvi
 
   @override
   Widget build(BuildContext context) {
+    final double iconSize = 30 * widget.wRatio;
+    final double fontSize = 18 * widget.wRatio;
+    final double spacing = 10 * widget.wRatio;
+    final double bottomOffset = 80 * widget.wRatio;
+
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
@@ -303,17 +338,17 @@ class _ScrollingArrowState extends State<_ScrollingArrow> with SingleTickerProvi
               Icon(
                 Icons.arrow_forward_ios,
                 color: widget.mode == "light" ? Colors.black26 : Colors.white,
-                size: 30,
+                size: iconSize,
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: spacing),
               Text(
                 "Swipe",
                 style: TextStyle(
                   color: widget.mode == "light" ? Colors.black26 : Colors.white,
-                  fontSize: 18,
+                  fontSize: fontSize,
                 ),
               ),
-              const SizedBox(height: 80),
+              SizedBox(height: bottomOffset),
             ]
           )
         ); 

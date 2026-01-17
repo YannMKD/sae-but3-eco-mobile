@@ -25,33 +25,37 @@ class _AppLayoutState extends State<AppLayout> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final double wRatio = size.width / 392.7;
+    final double hRatio = size.height / 850.7;
+
     final List<Widget> screens = [
       MyHomeScreen(key: homeKey, dbService: widget.dbService, mode: widget.mode, initialTracks: widget.initialTracks,),
       PlaylistScreen(key: playlistKey, dbService: widget.dbService, mode: widget.mode, onNotifyUpdate: () => homeKey.currentState?.syncStarsWithLikes()),
     ];
 
     return Scaffold(
-      extendBody: false,
-      backgroundColor: widget.mode=="light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+      backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
       appBar: AppBar(
-        toolbarHeight: 80,
+        toolbarHeight: 80 * hRatio,
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: widget.mode=="light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
         title: Image.asset(
           widget.mode == "light" ? 'assets/images/TRACKSTAR sans typo 1.png' : 'assets/images/TRACKSTAR variant sans typo 1.png',
-          width: 30,
-          height: 30,
+          width: 30 * wRatio,
+          height: 30 * wRatio,
           fit: BoxFit.contain,
         ),
         centerTitle: true,
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 10.0),
+            padding: EdgeInsets.only(right: 10.0 * wRatio),
             child: IconButton(
               icon: Icon(
                 widget.mode == "light" ? Icons.dark_mode_outlined : Icons.light_mode_rounded,
                 color: widget.mode == "light" ? Colors.black : Colors.white,
+                size: 24 * wRatio,
               ),
               onPressed: () {
                 setState(() {
@@ -68,83 +72,73 @@ class _AppLayoutState extends State<AppLayout> {
         children: screens,
       ),
       bottomNavigationBar: Container(
-        color: widget.mode=="light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
-        height: 95,
-        alignment: AlignmentGeometry.topCenter,
+        color: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
+        height: 95 * hRatio,
+        alignment: Alignment.topCenter,
         child: GlassBox(
-          height: 80,
-          borderRadius: BorderRadius.circular(20),
-          padding: 6,
+          height: 80 * hRatio,
+          borderRadius: BorderRadius.circular(20 * wRatio),
+          padding: 6 * wRatio,
           mode: widget.mode,
           child: IntrinsicWidth(
-            child : Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                GestureDetector(
-                  onTap: () => setState(() => _selectedIndex = 0),
-                  child: Container(
-                    width: 100,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: widget.mode == "light" 
-                          ? 
-                            (_selectedIndex == 0
-                              ? Colors.white.withValues(alpha: 0.9)
-                              : Colors.white.withValues(alpha: 0.25)) 
-                          :
-                            (_selectedIndex == 0
-                              ? Colors.black.withValues(alpha: 0.4)
-                              : Colors.black.withValues(alpha: 0.25)) ,
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: widget.mode=="light" ? 
-                        Colors.black.withValues(alpha: 0.14) : 
-                        Colors.white.withValues(alpha: 0.14)
-                      ),
-                    ),
-                    child: Center(
-                      child: Image.asset(widget.mode == "light" ?
-                          'assets/images/swipe-icon-black.png'  :
-                          'assets/images/swipe-icon-white.png', 
-                        width: 24),
-                    ),
-                  ),
+                _buildNavItem(
+                  index: 0,
+                  wRatio: wRatio,
+                  hRatio: hRatio,
+                  iconPath: widget.mode == "light" ? 'assets/images/swipe-icon-black.png' : 'assets/images/swipe-icon-white.png',
                 ),
-                GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedIndex = 1);
-                    playlistKey.currentState?.loadPlaylist();
-                  },
-                  child: Container(
-                    width: 100,
-                    height: 60,
-                    decoration: BoxDecoration(
-                     color: widget.mode == "light" ? 
-                          (_selectedIndex == 1
-                            ? Colors.white.withValues(alpha: 0.9)
-                            : Colors.white.withValues(alpha: 0.25)) :
-                          (_selectedIndex == 1
-                            ? Colors.black.withValues(alpha: 0.4)
-                            : Colors.black.withValues(alpha: 0.25)) ,
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: widget.mode=="light" ? 
-                        Colors.black.withValues(alpha: 0.14) : 
-                        Colors.white.withValues(alpha: 0.14)
-                      )
-                    ),
-                    child: Center(
-                      child: Image.asset(
-                        'assets/images/playlist-liked-icon-white.png', 
-                        color: widget.mode == "light" ? Colors.black : Colors.white,
-                        width: 24),
-                    ),
-                  ),
+                SizedBox(width: 13 * wRatio),
+                _buildNavItem(
+                  index: 1,
+                  wRatio: wRatio,
+                  hRatio: hRatio,
+                  iconPath: 'assets/images/playlist-liked-icon-white.png',
+                  isPlaylist: true,
                 ),
-              ].expand((widget) => [
-                widget,
-                const SizedBox(width: 13),
-              ]).toList()..removeLast(),
-            )
-          ) 
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required double wRatio,
+    required double hRatio,
+    required String iconPath,
+    bool isPlaylist = false,
+  }) {
+    bool isSelected = _selectedIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedIndex = index);
+        if (isPlaylist) playlistKey.currentState?.loadPlaylist();
+      },
+      child: Container(
+        width: 100 * wRatio,
+        height: 60 * hRatio,
+        decoration: BoxDecoration(
+          color: widget.mode == "light" 
+              ? (isSelected ? Colors.white.withOpacity(0.9) : Colors.white.withOpacity(0.25)) 
+              : (isSelected ? Colors.black.withOpacity(0.4) : Colors.black.withOpacity(0.25)),
+          borderRadius: BorderRadius.circular(15 * wRatio),
+          border: Border.all(
+            color: widget.mode == "light" 
+                ? Colors.black.withOpacity(0.14) 
+                : Colors.white.withOpacity(0.14),
+          ),
+        ),
+        child: Center(
+          child: Image.asset(
+            iconPath,
+            width: 24 * wRatio,
+            color: isPlaylist && widget.mode == "light" ? Colors.black : null,
+          ),
         ),
       ),
     );
