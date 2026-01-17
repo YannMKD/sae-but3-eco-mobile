@@ -69,7 +69,7 @@ class _AppLayoutState extends State<AppLayout> {
       ),
       bottomNavigationBar: Container(
         color: widget.mode=="light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
-        height: 103,
+        height: 95,
         alignment: AlignmentGeometry.topCenter,
         child: GlassBox(
           height: 80,

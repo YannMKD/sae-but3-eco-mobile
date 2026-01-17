@@ -312,7 +312,8 @@ class _ScrollingArrowState extends State<_ScrollingArrow> with SingleTickerProvi
                   color: widget.mode == "light" ? Colors.black26 : Colors.white,
                   fontSize: 18,
                 ),
-              ) 
+              ),
+              const SizedBox(height: 80),
             ]
           )
         ); 

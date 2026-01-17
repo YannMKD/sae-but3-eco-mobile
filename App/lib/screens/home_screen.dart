@@ -6,6 +6,7 @@ import 'package:trackstar/models/glass_box.dart';
 import 'package:trackstar/models/star.dart';
 import 'package:trackstar/models/starfield_painter.dart';
 import 'package:trackstar/models/swipe_icon_particle.dart';
+import 'package:trackstar/screens/loading.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 import 'dart:math' as math;
@@ -49,6 +50,8 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
   bool _isTutoActive = true;
 
   bool _tutoIconVisible = true;
+
+  bool _isFetching = false; 
 
   late AnimationController _masterController;
   late AnimationController _swipeController;
@@ -105,9 +108,9 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
     );
 
     _tutoAnimation = TweenSequence<Offset>([
-      TweenSequenceItem(tween: Tween(begin: Offset.zero, end: const Offset(-0.25, 0.0)).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: const Offset(-0.25, 0.0), end: const Offset(0.25, 0.0)).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: const Offset(0.25, 0.0), end: Offset.zero).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: Offset.zero, end: const Offset(-0.05, 0.0)).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: const Offset(-0.05, 0.0), end: const Offset(0.05, 0.0)).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: const Offset(0.05, 0.0), end: Offset.zero).chain(CurveTween(curve: Curves.easeIn)), weight: 50),
     ]).animate(CurvedAnimation(parent: _masterController, curve: const Interval(0.0, 0.5)));
 
     _frameTimer.reset();
@@ -117,13 +120,11 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
     final now = DateTime.now();
     final touch = _touchPosition;
 
-    // Si performance basse, on ne traite qu'une étoile sur deux
     int step = _performanceLevel == 0 ? 2 : 1;
 
     for (int i = 0; i < _stars.length; i += step) {
       var star = _stars[i];
 
-      // Gestion du "isNew"
       if (star.isNew && star.birthTime != null) {
         if (now.difference(star.birthTime!).inMilliseconds > 2000) {
           star.isNew = false;
@@ -133,7 +134,6 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
       double targetX = star.originX;
       double targetY = star.originY;
 
-      // Optimisation : Pas d'interaction tactile en mode "Low Performance"
       if (touch != null && _performanceLevel > 0) {
         double dx = star.x - touch.dx;
         double dy = star.y - touch.dy;
@@ -141,13 +141,11 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
         
         if (distSq < 10000) { 
           if (_performanceLevel == 2) {
-            // High : Calcul précis
             double dist = math.sqrt(distSq);
             double force = (100 - dist) * 0.5;
             targetX += (dx / dist) * force;
             targetY += (dy / dist) * force;
           } else {
-            // Medium : Calcul approximatif (pas de sqrt)
             targetX += dx * 0.05;
             targetY += dy * 0.05;
           }
@@ -191,32 +189,40 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
   }
 
   Future<void> _fetchHybridRecommendations({bool isInitial = false}) async {
+    if (_isFetching) return;
+    
+    _isFetching = true;
     if (isInitial) setState(() => _isLoading = true);
-    final int interactionCount = await widget.dbService.countInteractions();
-    final List<Track> tracks = interactionCount < 5
-        ? await widget.dbService.getColdStartTracks(excludeTrackIds: _shownTrackIds.toList())
-        : await widget.dbService.getHybridRecommendations(excludeTrackIds: _shownTrackIds.toList());
 
-    _shownTrackIds.addAll(tracks.map((t) => t.trackId));
+    try {
+      if (isInitial) setState(() => _isLoading = true);
+      final int interactionCount = await widget.dbService.countInteractions();
+      final List<Track> tracks = interactionCount < 5
+          ? await widget.dbService.getColdStartTracks(excludeTrackIds: _shownTrackIds.toList())
+          : await widget.dbService.getHybridRecommendations(excludeTrackIds: _shownTrackIds.toList());
 
-    if (mounted) {
-      setState(() {
-        _recommendations.addAll(tracks);
-        _isLoading = false;
-      });
+      _shownTrackIds.addAll(tracks.map((t) => t.trackId));
+
+      if (mounted) {
+        setState(() {
+          _recommendations.addAll(tracks);
+          _isLoading = false;
+        });
+      }
+    } catch (e){
+      debugPrint("Erreur de chargement: $e");
+    } finally {
+      _isFetching = false;
     }
   }
 
-  // Dans MyHomeScreenState
-  int _performanceLevel = 2; // 2: High, 1: Medium, 0: Low
+  int _performanceLevel = 2; 
   Stopwatch _frameTimer = Stopwatch();
 
   void _adjustPerformance(int frameTimeMs) {
     if (frameTimeMs > 25 && _performanceLevel > 0) {
-      // Si la frame dépasse 25ms, on baisse la qualité
       setState(() => _performanceLevel--);
     } else if (frameTimeMs < 10 && _performanceLevel < 2) {
-      // Si c'est très fluide, on peut remonter
       setState(() => _performanceLevel++);
     }
   }
@@ -305,12 +311,19 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241) : Colors.black,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        backgroundColor: widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 248) : const Color.fromARGB(255, 12, 12, 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
         title: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Très bien !"),
-        content: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Les paramétrages sont terminés. Nous vous recommanderons désormais des titres selon vos nouvelles préférences !"),
+        content: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black45 : const Color.fromARGB(107, 255, 255, 255)), "Les paramétrages sont terminés. Nous vous recommanderons désormais des sources selon vos nouvelles préférences !"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Commencer"))
+          TextButton(
+            style: ButtonStyle(
+                padding:MaterialStateProperty.all<EdgeInsets>(const EdgeInsets.symmetric(horizontal: 20, vertical: 0)),
+                side: MaterialStateProperty.all<BorderSide>(BorderSide(color: widget.mode == "light" ? Colors.black38 : const Color.fromARGB(106, 255, 255, 255))),
+                foregroundColor: MaterialStateProperty.all<Color>(widget.mode == "light" ? Colors.black : Colors.white),
+            ),
+            onPressed: () => Navigator.pop(context), child: Text(style: TextStyle(color: widget.mode == "light" ? Colors.black : Colors.white), "Commencer")
+          )
         ],
       ),
     );
@@ -389,21 +402,19 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
 
     return Positioned.fill(
       child: IgnorePointer(
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 150),
-          opacity: _tutoIconVisible ? 1.0 : 0.0,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Center(
-                child: Transform.translate(
-                  offset: _tutoAnimation.value * 50,
+        child: AnimatedBuilder(
+          animation: _masterController, 
+          builder: (context, child) {
+            return FractionalTranslation(
+              translation: _tutoAnimation.value, 
+              child: Opacity(
+                opacity: _tutoIconVisible ? 0.6 : 0.0,
+                child: Center(
                   child: Icon(Icons.touch_app, size: 50, color: widget.mode == "light" ? Colors.black : Colors.white24),
                 ),
               ),
-              const SizedBox(height: 80),
-            ],
-          ),
+            );
+          },
         ),
       )
     );
@@ -458,7 +469,7 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
               center: Alignment.center,
               radius: 1.2 * _nebulaAnimation.value, 
               colors: [
-                getGalaxyColor(genre).withOpacity(0.2 * _nebulaAnimation.value),
+                widget.mode == "dark" ? getGalaxyColor(genre).withOpacity(0.2 * _nebulaAnimation.value) : getGalaxyColor(genre).withOpacity(0.8 * _nebulaAnimation.value),
                 widget.mode == "light" ? const Color.fromARGB(255, 248, 247, 241).withOpacity(0.0) : Colors.black.withOpacity(0.0),
               ],
             ),
@@ -469,7 +480,7 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
   }
 
   Widget _buildCentralContent(bool isOutOfBounds) {
-    if (_isLoading || isOutOfBounds) return Center(child: CircularProgressIndicator(color: widget.mode == "light" ? Colors.black : Colors.white));
+    if (_isLoading || isOutOfBounds) return Center(child: Loading(color: widget.mode == "light" ? Colors.black : Colors.white, size: 60));
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -493,64 +504,60 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
       backgroundColor: widget.mode == "light" 
           ? const Color.fromARGB(255, 248, 247, 241) 
           : Colors.black,
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onPanStart: (_) => _masterController.stop(),
-        onPanEnd: (_) => _masterController.repeat(),
-        child: Stack(
-          children: [
-            AnimatedBuilder(
-              animation: _masterController,
-              builder: (context, _) {
-                return Stack(
-                  children: [
-                    // Nébuleuse
-                    RepaintBoundary(
-                      child: Opacity(
-                        opacity: _nebulaAnimation.value,
-                        child: _buildNebulaBackground(currentGenre),
-                      ),
-                    ),
-                    // Étoiles
-                    RepaintBoundary(
-                      child: CustomPaint(
-                        painter: StarFieldPainter(_stars, widget.mode),
-                      ),
-                    ),
-                  ],
-                );
-              }
-            ),
-            _buildOverlayGradient(),
-            SafeArea(
-              child: RepaintBoundary( 
-                child: _buildCentralContent(isOutOfBounds),
-              ),
-            ),
-              ..._swipeParticles.map((p) => Positioned(
-              left: p.x,
-              top: p.y,
-              child: Opacity(
-                opacity: p.opacity.clamp(0.0, 1.0),
-                child: Transform.rotate(
-                  angle: p.angle, 
-                  child: Image.asset(
-                    !p.isLike 
-                      ? 'assets/images/cross-icon-fill-white.png'
-                      : 'assets/images/liked-icon-fill-white.png',
-                    width: p.size,
-                    height: p.size,
-                    color: !p.isLike
-                      ? (widget.mode == "dark" ? Colors.white : Colors.red)
-                      : (widget.mode == "dark" ? Colors.white : Colors.deepPurple),
+      body: Listener(
+        onPointerMove: (e) => _touchPosition = e.localPosition,
+        onPointerUp: (e) => _touchPosition = null,
+        child: GestureDetector(
+          onPanStart: (_) => _masterController.stop(),
+          onPanEnd: (_) => _masterController.repeat(),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: RepaintBoundary(
+                  child: AnimatedBuilder(
+                    animation: _masterController,
+                    builder: (context, _) {
+                      return Stack(
+                        children: [
+                          _buildNebulaBackground(currentGenre),
+                          CustomPaint(painter: StarFieldPainter(_stars, widget.mode)),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
-            )).toList(),
-            _buildTutoOverlay(),
-          ],
+              _buildOverlayGradient(),
+              SafeArea(
+                child: RepaintBoundary( 
+                  child: _buildCentralContent(isOutOfBounds),
+                ),
+              ),
+                ..._swipeParticles.map((p) => Positioned(
+                left: p.x,
+                top: p.y,
+                child: Opacity(
+                  opacity: p.opacity.clamp(0.0, 1.0),
+                  child: Transform.rotate(
+                    angle: p.angle, 
+                    child: Image.asset(
+                      !p.isLike 
+                        ? 'assets/images/cross-icon-fill-white.png'
+                        : 'assets/images/liked-icon-fill-white.png',
+                      width: p.size,
+                      height: p.size,
+                      color: !p.isLike
+                        ? (widget.mode == "dark" ? Colors.white : Colors.red)
+                        : (widget.mode == "dark" ? Colors.white : Colors.deepPurple),
+                    ),
+                  ),
+                ),
+              )).toList(),
+              _buildTutoOverlay(),
+            ],
+          ),
         ),
-      ),
+      )
     );
   }
 
