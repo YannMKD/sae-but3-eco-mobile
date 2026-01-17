@@ -1,0 +1,304 @@
+import 'dart:io';
+import 'package:path/path.dart' show dirname;
+
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:sqflite/sqflite.dart';
+
+import '../models/track.dart';
+
+class DatabaseQueries {
+    static const String countUserInteractions = '''
+        SELECT 
+                COUNT(*) AS total_interactions 
+        FROM 
+                tracks 
+        WHERE 
+                liked != 0;
+    ''';
+
+    static const String coldStartTracks = '''
+        SELECT DISTINCT
+                track_id, 
+                track_name, 
+                track_artist,
+                Cluster_Style,
+                track_popularity,
+                liked,
+                CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8
+        FROM 
+                tracks
+        WHERE
+                liked = 0 OR liked IS NULL
+        ORDER BY
+                track_popularity DESC 
+        LIMIT 10;
+    ''';
+
+    static const String calculateProfileVector = '''
+        SELECT
+                CAST(SUM(CASE WHEN liked = 1 THEN CP1 ELSE -CP1 END) AS REAL) / COUNT(*) AS avg_cp1,
+                CAST(SUM(CASE WHEN liked = 1 THEN CP2 ELSE -CP2 END) AS REAL) / COUNT(*) AS avg_cp2,
+                CAST(SUM(CASE WHEN liked = 1 THEN CP3 ELSE -CP3 END) AS REAL) / COUNT(*) AS avg_cp3,
+                CAST(SUM(CASE WHEN liked = 1 THEN CP4 ELSE -CP4 END) AS REAL) / COUNT(*) AS avg_cp4,
+                CAST(SUM(CASE WHEN liked = 1 THEN CP5 ELSE -CP5 END) AS REAL) / COUNT(*) AS avg_cp5,
+                CAST(SUM(CASE WHEN liked = 1 THEN CP6 ELSE -CP6 END) AS REAL) / COUNT(*) AS avg_cp6,
+                CAST(SUM(CASE WHEN liked = 1 THEN CP7 ELSE -CP7 END) AS REAL) / COUNT(*) AS avg_cp7,
+                CAST(SUM(CASE WHEN liked = 1 THEN CP8 ELSE -CP8 END) AS REAL) / COUNT(*) AS avg_cp8
+        FROM 
+                tracks
+        WHERE 
+                liked != 0;
+    ''';
+
+    static const String findSimilarTracks = '''
+        SELECT DISTINCT
+                track_id, track_name, track_artist, Cluster_Style, track_popularity,
+                liked, CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8,
+                (CP1 - ?) * (CP1 - ?) +
+                (CP2 - ?) * (CP2 - ?) +
+                (CP3 - ?) * (CP3 - ?) +
+                (CP4 - ?) * (CP4 - ?) +
+                (CP5 - ?) * (CP5 - ?) +
+                (CP6 - ?) * (CP6 - ?) +
+                (CP7 - ?) * (CP7 - ?) +
+                (CP8 - ?) * (CP8 - ?) AS distance_sq
+        FROM 
+                tracks
+        WHERE
+                liked = 0 OR liked IS NULL
+        ORDER BY 
+                distance_sq ASC
+        LIMIT 7;
+    ''';
+
+    static const String getLikedArtists = '''
+        SELECT DISTINCT
+                track_artist
+        FROM 
+                tracks
+        WHERE 
+                liked = 1;
+    ''';
+
+    static const String getLikedTracks = '''
+        SELECT DISTINCT
+                track_id,
+                track_name,
+                track_artist,
+                Cluster_Style,
+                track_popularity,
+                liked,
+                CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8
+        FROM
+                tracks
+        WHERE
+                liked = 1
+        ORDER BY
+                track_popularity DESC;
+    ''';
+
+    static const String findArtistTracks = '''
+        SELECT
+                track_id,
+                track_name,
+                track_artist,
+                Cluster_Style,
+                track_popularity,
+                liked,
+                CP1, CP2, CP3, CP4, CP5, CP6, CP7, CP8
+        FROM
+                tracks
+        WHERE
+                liked = 0
+                AND track_artist IN (?)
+        ORDER BY
+                track_popularity DESC
+        LIMIT 3;
+    ''';
+
+    static const String updateTrackInteraction = '''
+        UPDATE 
+                tracks
+        SET 
+                liked = ? 
+        WHERE 
+                track_id = ?;
+    ''';
+}
+
+class DatabaseService {
+    final Database _db;
+
+    DatabaseService._(this._db);
+
+    static Future<DatabaseService> init({String dbFileName = 'app_data.db'}) async {
+        final databasesPath = await getDatabasesPath();
+        final path = '$databasesPath/$dbFileName';
+
+        try {
+            final exists = await databaseExists(path);
+            if (!exists) {
+                print('*** DEBUG BDD: Fichier non existant. Copie de l\'asset...');
+                try {
+                    final data = await rootBundle.load('assets/$dbFileName');
+                    final bytes = data.buffer.asUint8List();
+                    await Directory(dirname(path)).create(recursive: true);
+                    final file = File(path);
+                    await file.writeAsBytes(bytes, flush: true);
+                    print('*** DEBUG BDD: Copie de l\'asset terminée.');
+                } catch (e) {
+                    print('*** DEBUG BDD: ÉCHEC CRITIQUE de la copie de l\'asset: $e');
+                }
+            } else {
+                print('*** DEBUG BDD: Fichier existant trouvé. Conservation de la BD et des données.');
+            }
+        } catch (e) {
+            print('*** DEBUG BDD: Erreur lors de l\'initialisation: $e');
+        }
+
+        final db = await openDatabase(path);
+        return DatabaseService._(db);
+    }
+
+    Future<int> countInteractions() async {
+        final stopwatch = Stopwatch()..start();
+        final rows = await _db.rawQuery(DatabaseQueries.countUserInteractions);
+        stopwatch.stop();
+        print("⏱️ PERF - countInteractions() exécutée en : ${stopwatch.elapsedMilliseconds} ms");
+        return Sqflite.firstIntValue(rows) ?? 0;
+    }
+
+    Future<List<Track>> getColdStartTracks({List<String>? excludeTrackIds}) async {
+        final stopwatch = Stopwatch()..start();
+
+        final excludeIds = excludeTrackIds ?? [];
+        final interactedRows = await _db.rawQuery('SELECT track_id FROM tracks WHERE liked != 0');
+        final interactedIds = interactedRows.map((r) => r['track_id'] as String).toSet();
+        excludeIds.addAll(interactedIds);
+
+        String query = DatabaseQueries.coldStartTracks;
+        List<dynamic> params = [];
+
+        if (excludeIds.isNotEmpty) {
+            final placeholders = List.filled(excludeIds.length, '?').join(',');
+            query = query.replaceFirst('WHERE', 'WHERE track_id NOT IN ($placeholders) AND');
+            params = excludeIds;
+        }
+
+        final rows = await _db.rawQuery(query, params);
+        final result = rows.map((r) => Track.fromMap(r)).toList();
+
+        stopwatch.stop();
+        print("⏱️ PERF - getColdStartTracks() exécutée en : ${stopwatch.elapsedMilliseconds} ms (${result.length} tracks)");
+
+        return result;
+    }
+
+    Future<List<String>> getLikedArtists() async {
+        final rows = await _db.rawQuery(DatabaseQueries.getLikedArtists);
+        return rows.map((r) => r['track_artist'] as String).toList();
+    }
+
+    Future<List<Track>> getArtistRecommendations(List<String> artists) async {
+        if (artists.isEmpty) return [];
+        final placeholders = List.filled(artists.length, '?').join(',');
+        final query = DatabaseQueries.findArtistTracks.replaceFirst('(?)', '($placeholders)');
+        final rows = await _db.rawQuery(query, artists);
+        return rows.map((r) => Track.fromMap(r)).toList();
+    }
+
+    Future<List<Track>> getHybridRecommendations({List<String>? excludeTrackIds}) async {
+        final totalStopwatch = Stopwatch()..start();
+
+        // 1. Calcul du profil utilisateur
+        final profileStopwatch = Stopwatch()..start();
+        final profileRows = await _db.rawQuery(DatabaseQueries.calculateProfileVector);
+        if (profileRows.isEmpty) {
+            totalStopwatch.stop();
+            print("⏱️ PERF - getHybridRecommendations() : PAS DE DONNÉES (profil vide)");
+            return [];
+        }
+        profileStopwatch.stop();
+        print("⏱️ PERF - Calcul profil utilisateur : ${profileStopwatch.elapsedMilliseconds} ms");
+
+        final profile = ProfileVector.fromMap(profileRows.first);
+        final avgList = profile.toSqlParams();
+
+        final params = <dynamic>[];
+        for (final v in avgList) {
+            params.add(v);
+            params.add(v);
+        }
+
+        // 2. Recommandations vectorielles (70%)
+        final vectorStopwatch = Stopwatch()..start();
+        final vectorRows = await _db.rawQuery(DatabaseQueries.findSimilarTracks, params);
+        final vectorTracks = vectorRows.map((r) => Track.fromMap(r)).toList();
+        vectorStopwatch.stop();
+        print("⏱️ PERF - Recommandations vectorielles : ${vectorStopwatch.elapsedMilliseconds} ms (${vectorTracks.length} tracks)");
+
+        // 3. Recommandations artistes (30%)
+        final artistStopwatch = Stopwatch()..start();
+        final likedArtists = await getLikedArtists();
+        final artistTracks = await getArtistRecommendations(likedArtists);
+        artistStopwatch.stop();
+        print("⏱️ PERF - Recommandations artistes : ${artistStopwatch.elapsedMilliseconds} ms (${artistTracks.length} tracks depuis ${likedArtists.length} artistes)");
+
+        // 4. Combinaison et filtrage
+        final combineStopwatch = Stopwatch()..start();
+        final combined = <Track>[];
+        combined.addAll(vectorTracks.take(7));
+        combined.addAll(artistTracks.take(3));
+
+        // Remove duplicates by trackId
+        final seenTrackIds = <String>{};
+        combined.retainWhere((track) {
+            if (seenTrackIds.contains(track.trackId)) {
+                return false;
+            }
+            seenTrackIds.add(track.trackId);
+            return true;
+        });
+
+        // Exclude already interacted tracks or specified tracks
+        final excludeIds = excludeTrackIds ?? [];
+        final interactedRows = await _db.rawQuery('SELECT track_id FROM tracks WHERE liked != 0');
+        final interactedIds = interactedRows.map((r) => r['track_id'] as String).toSet();
+        excludeIds.addAll(interactedIds);
+
+        combined.removeWhere((track) => excludeIds.contains(track.trackId));
+
+        // Shuffle and filter for discovery (80% popular, 20% discovery)
+        combined.shuffle();
+        final popular = combined.where((t) => t.trackPopularity > 50).take((combined.length * 0.8).round());
+        final discovery = combined.where((t) => t.trackPopularity <= 50).take((combined.length * 0.2).round());
+        final finalList = [...popular, ...discovery];
+        finalList.shuffle();
+
+        combineStopwatch.stop();
+        totalStopwatch.stop();
+
+        print("⏱️ PERF - Combinaison/filtrage : ${combineStopwatch.elapsedMilliseconds} ms");
+        print("⏱️ PERF - getHybridRecommendations() TOTAL : ${totalStopwatch.elapsedMilliseconds} ms (${finalList.length} tracks finaux)");
+
+        return finalList;
+    }
+
+    Future<void> updateInteraction(String trackId, int status) async {
+        await _db.rawUpdate(DatabaseQueries.updateTrackInteraction, [status, trackId]);
+    }
+
+    Future<void> close() async => await _db.close();
+    
+    Future<List<Track>> getLikedTracks() async {
+        try {
+            final List<Map<String, dynamic>> result = await _db.rawQuery(
+                DatabaseQueries.getLikedTracks,
+            );
+            return result.map((map) => Track.fromMap(map)).toList();
+        } catch (e) {
+            print('ERREUR lors de la récupération de la playlist : $e');
+            return [];
+        }
+    }
+}
