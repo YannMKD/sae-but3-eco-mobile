@@ -152,22 +152,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               _buildPage(
                 context,
                 hRatio, wRatio,
-                title: "ACCÈS TRACKSTAR", 
-                text: "Exploration de flux musicaux en temps réel. Accédez à de nouvelles sources sonores chaque jour.",
+                title: "BIENVENUE SUR TRACKSTAR",
+                text: "Chase Stars, Not Trends.\nConstruisez votre propre univers musical.",
                 icon: Icons.radar,
               ),
               _buildPage(
                 context,
                 hRatio, wRatio,
-                title: "NAVIGATION TACTILE", 
-                text: "Swipe droit pour ajouter le titre dans ta bibliothèque. Swipe gauche pour ignorer et passer à la source suivante.",
+                title: "CHOISISSEZ VOS ÉTOILES",
+                text: "Swipe à droite pour garder un titre.\nSwipe à gauche pour l'ignorer.",
                 icon: Icons.swipe,
               ),
               _buildPage(
                 context,
                 hRatio, wRatio,
-                title: "CALIBRAGE PROFIL", 
-                text: "Analyse de 5 sources requise pour stabiliser l'algorithme et définir votre trajectoire musicale.",
+                title: "AJUSTEZ VOTRE TRAJECTOIRE",
+                text: "Analysez quelques étoiles pour stabiliser le système et affiner votre trajectoire musicale.",
                 icon: Icons.tune,
                 isLast: true,
                 onDone: () async {
@@ -185,8 +185,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                           const begin = Offset(1.0, 0.0);
                           const end = Offset.zero;
                           const curve = Curves.easeInOutQuart;
-                          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                          return SlideTransition(position: animation.drive(tween), child: child);
+                          var tween = Tween(begin: begin, end: end)
+                              .chain(CurveTween(curve: curve));
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
                         },
                         transitionDuration: const Duration(milliseconds: 1200),
                       ),

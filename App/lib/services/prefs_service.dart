@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class PrefsService {
   static const String _onboardingKey = 'has_seen_onboarding';
+  static const String _istutoswipesKey = "tuto_swipes_done";
 
   static Future<void> setOnboardingComplete() async {
     final prefs = await SharedPreferences.getInstance();
@@ -10,7 +11,17 @@ class PrefsService {
 
   static Future<bool> isOnboardingComplete() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_onboardingKey) ?? false;
+    return prefs.getBool(_istutoswipesKey) ?? false;
+  }
+
+  static Future<void> setTutoSwipesComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_istutoswipesKey, true);
+  }
+
+  static Future<bool> isTutoSwipesComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_istutoswipesKey) ?? false;
   }
 
   static Future<void> resetAllData() async {

@@ -7,6 +7,7 @@ import 'package:trackstar/models/star.dart';
 import 'package:trackstar/models/starfield_painter.dart';
 import 'package:trackstar/models/swipe_icon_particle.dart';
 import 'package:trackstar/screens/loading.dart';
+import 'package:trackstar/services/prefs_service.dart';
 import '../services/database_service.dart';
 import '../models/track.dart';
 import 'dart:math' as math;
@@ -47,7 +48,7 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
   List<Star> _stars = [];
 
   int _tutoSwipeCount = 0;
-  bool _isTutoActive = true;
+  late bool _isTutoActive;
 
   bool _tutoIconVisible = true;
 
@@ -106,6 +107,8 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
     } else {
       _fetchHybridRecommendations(isInitial: true);
     }
+
+    _getTutoSwipesComplete();
   
     _masterController = AnimationController(
       vsync: this,
@@ -200,6 +203,10 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
     super.dispose();
   }
 
+  void _getTutoSwipesComplete() async {
+    _isTutoActive = !(await PrefsService.isTutoSwipesComplete());
+  }
+
   Future<void> _fetchHybridRecommendations({bool isInitial = false}) async {
     if (_isFetching) return;
     
@@ -265,8 +272,7 @@ class MyHomeScreenState extends State<MyHomeScreen> with TickerProviderStateMixi
           _isTutoActive = false;
           _tutoIconVisible = false;
         });
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('tuto_swipes_done', true);
+        await PrefsService.setTutoSwipesComplete();
         _showTutoConclusion();
       }
     }

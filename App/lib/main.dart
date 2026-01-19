@@ -24,7 +24,7 @@ void main() async {
 
   final String savedMode = prefs.getString('theme_mode') ?? "dark";
 
-  await PrefsService.resetAllData();
+  // await PrefsService.resetAllData();
 
   final bool onboardingDone = await PrefsService.isOnboardingComplete();
 
