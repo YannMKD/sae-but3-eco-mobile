@@ -19,88 +19,52 @@ class GlassBox extends StatelessWidget {
     required this.padding
   });
 
-  @override
+ @override
   Widget build(BuildContext context) {
-    if (mode == "light") {
-      return ClipRRect(
+    final isLight = mode == "light";
+
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
         borderRadius: borderRadius,
-        child: Container(
-          width: width,
-          height: height,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                  child: Container(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
-                ),
-              ),
-              
-              Container(
-                padding: EdgeInsets.all(padding), 
-                decoration: BoxDecoration(
-                  borderRadius: borderRadius,
-                  border: Border.all(
-                    color: Colors.black.withValues(alpha: 0.14),
-                    width: 1,
-                  ),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      const Color.fromARGB(255, 208, 208, 208).withValues(alpha: 0.3),
-                      const Color.fromARGB(255, 208, 208, 208).withValues(alpha: 0.05),
-                    ],
-                  ),
-                ),
-                child: child, 
-              ),
-            ],
-          ),
+        border: Border.all(
+          color: isLight 
+              ? Colors.black.withOpacity(0.12) 
+              : Colors.white.withOpacity(0.18),
+          width: 1.2,
         ),
-      );
-    } else {
-      return ClipRRect(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          stops: const [0.0, 0.4, 1.0], 
+          colors: [
+            isLight 
+                ? Colors.white.withOpacity(0.5)
+                : Colors.white.withOpacity(0.12),
+            isLight 
+                ? Colors.white.withOpacity(0.25) 
+                : Colors.white.withOpacity(0.06),
+            isLight 
+                ? Colors.white.withOpacity(0.35) 
+                : Colors.white.withOpacity(0.08),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isLight ? 0.05 : 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
         borderRadius: borderRadius,
-        child: Container(
-          width: width,
-          height: height,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                  child: Container(
-                    color: const Color.fromARGB(255, 255, 255, 255).withValues(alpha: 0.1),
-                  ),
-                ),
-              ),
-              
-              Container(
-                padding: EdgeInsets.all(padding), 
-                decoration: BoxDecoration(
-                  borderRadius: borderRadius,
-                  border: Border.all(
-                    color: const Color.fromARGB(255, 138, 138, 138).withValues(alpha: 0.8),
-                    width: 1,
-                  ),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      const Color.fromARGB(255, 208, 208, 208).withValues(alpha: 0.08),
-                      const Color.fromARGB(255, 208, 208, 208).withValues(alpha: 0.05),
-                    ],
-                  ),
-                ),
-                child: child, 
-              ),
-            ],
-          ),
+        child: Padding(
+          padding: EdgeInsets.all(padding),
+          child: child,
         ),
-      );
-    }
+      ),
+    );
   }
 }

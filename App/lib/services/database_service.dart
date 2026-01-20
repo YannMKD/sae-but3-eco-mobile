@@ -161,11 +161,16 @@ class DatabaseService {
     }
 
     Future<int> countInteractions() async {
+        final stopwatch = Stopwatch()..start();
         final rows = await _db.rawQuery(DatabaseQueries.countUserInteractions);
+        stopwatch.stop();
+        print("⏱️ PERF - countInteractions() exécutée en : ${stopwatch.elapsedMilliseconds} ms");
         return Sqflite.firstIntValue(rows) ?? 0;
     }
 
     Future<List<Track>> getColdStartTracks({List<String>? excludeTrackIds}) async {
+        final stopwatch = Stopwatch()..start();
+
         final excludeIds = excludeTrackIds ?? [];
         final interactedRows = await _db.rawQuery('SELECT track_id FROM tracks WHERE liked != 0');
         final interactedIds = interactedRows.map((r) => r['track_id'] as String).toSet();
@@ -181,7 +186,12 @@ class DatabaseService {
         }
 
         final rows = await _db.rawQuery(query, params);
-        return rows.map((r) => Track.fromMap(r)).toList();
+        final result = rows.map((r) => Track.fromMap(r)).toList();
+
+        stopwatch.stop();
+        print("⏱️ PERF - getColdStartTracks() exécutée en : ${stopwatch.elapsedMilliseconds} ms (${result.length} tracks)");
+
+        return result;
     }
 
     Future<List<String>> getLikedArtists() async {
@@ -198,8 +208,18 @@ class DatabaseService {
     }
 
     Future<List<Track>> getHybridRecommendations({List<String>? excludeTrackIds}) async {
+        final totalStopwatch = Stopwatch()..start();
+
+        // 1. Calcul du profil utilisateur
+        final profileStopwatch = Stopwatch()..start();
         final profileRows = await _db.rawQuery(DatabaseQueries.calculateProfileVector);
-        if (profileRows.isEmpty) return [];
+        if (profileRows.isEmpty) {
+            totalStopwatch.stop();
+            print("⏱️ PERF - getHybridRecommendations() : PAS DE DONNÉES (profil vide)");
+            return [];
+        }
+        profileStopwatch.stop();
+        print("⏱️ PERF - Calcul profil utilisateur : ${profileStopwatch.elapsedMilliseconds} ms");
 
         final profile = ProfileVector.fromMap(profileRows.first);
         final avgList = profile.toSqlParams();
@@ -210,15 +230,22 @@ class DatabaseService {
             params.add(v);
         }
 
-        // 70% vector recommendations
+        // 2. Recommandations vectorielles (70%)
+        final vectorStopwatch = Stopwatch()..start();
         final vectorRows = await _db.rawQuery(DatabaseQueries.findSimilarTracks, params);
         final vectorTracks = vectorRows.map((r) => Track.fromMap(r)).toList();
+        vectorStopwatch.stop();
+        print("⏱️ PERF - Recommandations vectorielles : ${vectorStopwatch.elapsedMilliseconds} ms (${vectorTracks.length} tracks)");
 
-        // 30% artist recommendations
+        // 3. Recommandations artistes (30%)
+        final artistStopwatch = Stopwatch()..start();
         final likedArtists = await getLikedArtists();
         final artistTracks = await getArtistRecommendations(likedArtists);
+        artistStopwatch.stop();
+        print("⏱️ PERF - Recommandations artistes : ${artistStopwatch.elapsedMilliseconds} ms (${artistTracks.length} tracks depuis ${likedArtists.length} artistes)");
 
-        // Combine: 7 vector + 3 artist = 10 tracks
+        // 4. Combinaison et filtrage
+        final combineStopwatch = Stopwatch()..start();
         final combined = <Track>[];
         combined.addAll(vectorTracks.take(7));
         combined.addAll(artistTracks.take(3));
@@ -247,6 +274,12 @@ class DatabaseService {
         final discovery = combined.where((t) => t.trackPopularity <= 50).take((combined.length * 0.2).round());
         final finalList = [...popular, ...discovery];
         finalList.shuffle();
+
+        combineStopwatch.stop();
+        totalStopwatch.stop();
+
+        print("⏱️ PERF - Combinaison/filtrage : ${combineStopwatch.elapsedMilliseconds} ms");
+        print("⏱️ PERF - getHybridRecommendations() TOTAL : ${totalStopwatch.elapsedMilliseconds} ms (${finalList.length} tracks finaux)");
 
         return finalList;
     }
