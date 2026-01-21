@@ -64,11 +64,9 @@ lib/
 ├── screens/                   # Vues (HomePage, SwipeView, Settings)
 ├── services/                  # Logique métier et accès données
 │   ├── database_service.dart  # Gestionnaire SQLite et requêtes brutes
-│   └── recommendation_engine.dart # Implémentation de la logique de filtrage
-├── theme/                     # Identité visuelle (Thème, Typographie Helvetica)
-└── widgets/                   # Composants réutilisables
+│   └── prefs_service.dart # Implémentation de la logique de filtrage
 assets/
-└── database/                  # Base de données pré-peuplée (app.db)
+└── images/               
 ```
 
 ## 📥 Installation
