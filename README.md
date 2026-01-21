@@ -1,44 +1,151 @@
-# ✨ Trackstar ✨
+# TRACKSTAR
 
-## ✨ Aperçu du Projet
+**Université Sorbonne Paris Nord - IUT de Villetaneuse**
+**BUT Informatique - 3ème année (Groupe Hauméa)**
+**SAE S501 : Développement avancé**
+**Année universitaire : 2025-2026**
 
-Notre application mobile développée avec **Flutter** qui implémente un système de recommandation musicale basé sur une approche **hybride**. L'objectif est d'aider l'utilisateur à découvrir de nouveaux morceaux via une interface simple de "swiping" (similaire à Tinder), tout en construisant un profil de goûts précis basé sur 8 **Composantes Principales (CP)** de la musique.
+Ce dépôt contient le code source et la documentation technique du projet TRACKSTAR, réalisé dans le cadre de la SAE S501 : Développement avancé 
+---
 
-L'application utilise une base de données **SQLite** pré-calculée qui contient les caractéristiques vectorielles de milliers de morceaux.
+## 1. Présentation du projet
+TRACKSTAR est une application mobile de recommandation musicale développée dans le cadre de la SAE S501 pour l'entreprise fictive *IUT Corp*.
+L’application propose à l’utilisateur des titres musicaux adaptés à ses préférences à partir d’interactions simples, tout en fonctionnant entièrement hors connexion Internet.
+
+L’objectif principal est de concevoir une application mobile capable :
+	•	de recommander des titres musicaux de manière personnalisée,
+	•	de fonctionner localement, sans dépendre d’API ou de services distants,
+	•	de proposer une interaction rapide et intuitive adaptée à un usage mobile.
+
+### Philosophie
+Le positionnement de l'application est résumé par le slogan : **"Chase Stars Not Trends"**. L'utilisateur est invité à construire son propre univers musical (sa "galaxie") au travers d'interactions directes, sans influence extérieure.
+L'application répond à une problématique de transparence et de personnalisation : là où les plateformes de streaming traditionnelles utilisent des algorithmes "boîte noire" favorisant les tendances commerciales, TRACKSTAR place l'utilisateur au centre de l'exploration musicale.
+
+
+
+## 2. Fonctionnalités Principales
+
+* **Mode Hors-ligne (Offline First) :** L'intégralité du catalogue et le moteur de recommandation sont embarqués sur le terminal.
+* **Mécanique de Swipe :** Interface de notation intuitive (droite pour "Liker", gauche pour "Disliker").
+* **Système de "Cold Start" :** En l'absence d'historique, l'application propose les titres les plus populaires pour amorcer la collecte de données.
+* **Recommandation Adaptative Hybride :**
+    * Analyse vectorielle des préférences.
+    * Diversification automatique (Règle 80/20 : 80% de titres similaires, 20% de découverte pour éviter la bulle de filtrage).
+
+
+
+## 3. Architecture et Choix Techniques
+
+Le projet repose sur une architecture modulaire séparant la couche de présentation, la logique métier et la persistance des données.
+
+### Stack Technique
+
+* **Framework : Flutter (Dart)**
+    * *Justification :* Choix motivé par la nécessité d'un rendu natif performant sur Android pour gérer les animations fluides (swipe) et par la portabilité du code.
+* **Persistance : SQLite (via `sqflite`)**
+    * *Justification :* Contrainte de fonctionnement hors-ligne. SQLite permet de stocker efficacement les métadonnées de ~30 000 titres et d'effectuer des opérations mathématiques (distances) directement via des requêtes SQL optimisées, sans la lourdeur d'un SGBD serveur.
+* **IDE & Outils :** VS Code / Android Studio, Figma (Maquettage), Git (Versioning), Photoshop (Branding).
+
+### Données utilisées
+
+L’application s’appuie sur une base de données musicale issue d’un dataset Spotify (Kaggle), contenant environ 30 000 titres.
+Chaque titre est décrit par douze caractéristiques audio, qui sont exploitées par le système de recommandation.
+
+Les données sont stockées localement dans une base SQLite, incluse directement dans l’application.
+Les interactions de l’utilisateur (likes / dislikes) sont également persistées localement, ce qui permet de conserver son profil entre deux sessions.
+
+
+### Structure du Projet
+
+```text
+lib/
+├── main.dart                  # Point d'entrée de l'application
+├── models/                    # Modèles de données (Track, ProfileVector)
+├── screens/                   # Vues (HomePage, SwipeView, Settings)
+├── services/                  # Logique métier et accès données
+│   ├── database_service.dart  # Gestionnaire SQLite et requêtes brutes
+│   └── recommendation_engine.dart # Implémentation de la logique de filtrage
+├── theme/                     # Identité visuelle (Thème, Typographie Helvetica)
+└── widgets/                   # Composants réutilisables
+assets/
+└── database/                  # Base de données pré-peuplée (app.db)
+```
+
+## 📥 Installation
+
+1.  **Cloner le dépôt :**
+    ```bash
+    git clone [https://github.com/votre-repo/trackstar.git](https://github.com/votre-repo/trackstar.git)
+    ```
+2.  **Installer les dépendances :**
+    ```bash
+    flutter pub get
+    ```
+3.  **Base de données :**
+    Assurez-vous que le fichier `app.db` (ou `tracks.db`) est bien présent dans `assets/database/`.
+4.  **Lancer l'application :**
+    ```bash
+    flutter run
+    ```
+
+
+## Performance et Optimisation
+
+L’application a été conçue pour garantir des performances compatibles avec un usage mobile *offline*, en maîtrisant le CPU, la mémoire et la batterie.
+
+### Analyse de Complexité
+- **Complexité globale :** **O(N log N)**  
+  La complexité est dominée par le tri des distances euclidiennes sur l’ensemble du catalogue (≈ 30 000 titres) lors de la phase de recommandation.
+
+### Optimisations mises en œuvre
+- **Réduction dimensionnelle (ACP)** : passage de 12 à 8 dimensions afin d’alléger les calculs vectoriels.
+- **Traitement asynchrone** : exécution du moteur de recommandation hors du thread UI pour préserver la fluidité.
+- **Mise en cache du profil utilisateur** : limitation des recalculs lors des swipes successifs.
+- **Gestion optimisée du cycle de vie** : arrêt des traitements coûteux en arrière-plan pour réduire l’impact énergétique.
+
+Ces choix permettent d’atteindre des temps de réponse inférieurs à la seconde, une consommation d’environ 10 % de batterie par heure et une utilisation mémoire stable, sans fuites.
 
 ---
 
-## 🛠️ Stack Technique
+## Branding & Interface
 
-| Domaine | Technologie / Langage | Dépendances Clés |
-| :--- | :--- | :--- |
-| **Mobile** | Flutter (Dart) | `sqflite`, `path_provider` |
-| **Base de Données** | SQLite | Fichier `assets/app_data.db` |
-| **Data Preprocessing**| Python, Pandas | `spotify_data_preprocessed_final.csv` (Source) |
+L’identité de TRACKSTAR a été conçue comme un prolongement direct du fonctionnement de l’application : encourager une découverte musicale active à travers une métaphore spatiale cohérente.
 
----
+- Concept narratif  
+  L’utilisateur est envisagé comme un explorateur évoluant au sein de galaxies musicales, chacune correspondant à un regroupement de titres aux caractéristiques audio similaires. Cette approche permet de rendre lisible et engageant un système de recommandation fondé sur des clusters algorithmiques.
 
-## 🚀 Fonctionnalités Clés et Algorithme
+- Logo  
+  Le logo représente une silhouette humaine inversée, flottant en apesanteur. Il ne décrit pas littéralement l’écoute musicale, mais symbolise le lâcher-prise, l’immersion et l’exploration, en cohérence avec l’univers de marque de l’application.
 
-### 1. Système de Swiping et Interactions
-L'utilisateur interagit avec les morceaux via :
-* **Swipe Droit (Like) :** `liked = 1`
-* **Swipe Gauche (Dislike) :** `liked = -1`
-* **Non vu :** `liked = 0`
+- Typographie  
+  Le nom TRACKSTAR utilise la police Helvetica, en référence à son usage historique dans l’identité visuelle de la NASA, afin d’ancrer la marque dans une imagerie d’exploration rigoureuse et technologique.  
+  L’interface de l’application repose volontairement sur la police système par défaut de Flutter, dans une logique de lisibilité, de performance et d’optimisation des ressources.
 
-### 2. Stratégie de Recommandation Hybride
+- Interface et choix visuels  
+  L’application adopte un mode sombre dominant, inspiré du ciel étoilé, accompagné d’effets visuels discrets (nébuleuses, animations de feedback) servant de repères narratifs.  
+  Le design est volontairement minimaliste et textuel, sans médias lourds, afin de garantir fluidité, réactivité et compatibilité avec un fonctionnement entièrement hors-ligne.
 
-Le système bascule dynamiquement entre deux modes :
 
-| Mode | Condition | Fonctionnement |
-| :--- | :--- | :--- |
-| **Cold Start** | Moins de 5 interactions enregistrées. | Affiche les 10 morceaux les plus populaires (`track_popularity` DESC). |
-| **Recommandation Vectorielle**| 5 interactions ou plus. | Calcule la distance euclidienne entre le **vecteur profil utilisateur** et les morceaux non vus (`liked=0`). Propose les morceaux ayant la distance la plus faible. |
+## Équipe de Développement (Groupe Hauméa)
 
-### 3. Calcul du Profil Utilisateur
+Le projet a été réalisé grâce à une organisation agile en pôles de compétences.
 
-Le vecteur profil (8 dimensions) est calculé comme la moyenne pondérée des vecteurs CP des morceaux aimés et dislikés :
+### Pilotage & Branding
+* **Kelvin UTHAYAKUMAR** (Chef de projet & Frontend)
+* **Yann DIARRASSOUBA** (Branding & Algorithmie)
 
-$$\text{Score Net Moyen} (\text{CP}_n) = \frac{\sum_{\text{Like}} \text{CP}_n - \sum_{\text{Dislike}} \text{CP}_n}{N_{\text{Total Swipes}}}$$
+### Développement Logiciel
+* **Rayan EL OUAZZANI** (Lead Fullstack & Architecture Reco)
+* **Edmilson DA COSTA SA** (Backend & Support technique)
+* **Ilyes MEDJDOUB** (Optimisation & Qualité)
 
-Ce calcul est effectué via la requête SQL `DatabaseQueries.calculateProfileVector`.
+### Interface & Expérience Utilisateur
+* **Leelian SERRANT** (Lead Frontend & UI/UX)
+* **Mouhamadou Mourtada DIOP** (Intégration Front-end)
+
+
+
+## 📄 Licence
+
+Ce projet est distribué sous licence MIT.
+*Copyright © 2026 Groupe Hauméa - IUT de Villetaneuse.*
